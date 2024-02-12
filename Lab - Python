@@ -1,0 +1,222 @@
+##Ejercicio 1##
+#Estamos buscando el punto donde df=0, vamos a necesitar la segunda derivada
+def newton(df, d2f, x0, tol=1e-8):
+    reps = 0
+    while abs(df(x0))>tol:
+        x0 = x0 - (df(x0)/d2f(x0)) 
+        reps += 1
+    return x0, reps
+
+
+#Función de beneficios es concava, caso contrario no habria maximo.
+def bisection(df, a, b, tol=1e-8):
+    reps = 0
+    mid = (a+b)/2
+    while abs(df(mid))>tol:
+        if df(mid)*df(a) > 0:
+            a = mid
+        else:
+            b = mid
+        mid = (a+b)/2
+        reps += 1
+    return mid, reps
+
+
+def f(x, eta = 0.7, c = 1):
+    qi = x
+    qj = qi
+    #Usamos qi y qj para dar claridad al code.
+    return qi*(((qi+qj)**-eta)-c)
+
+def df(x, eta = 0.7, c = 1):
+    return (2*x)**(-eta) - eta*x*((2*x)**(-eta-1)) - c
+
+def d2f(x, eta = 0.7):
+    return (eta-2)*eta*(2*x)**(-eta-1)
+
+
+def main():
+    print("Usando Bisección: q* =",bisection(df, 0.0001, 50)[0])
+    print("Repeticiones:", bisection(df, 0.0001, 50)[1])
+    print("Usando Newton-Rapshon: q* =",newton(df, d2f, 0.0001)[0])
+    print("Repeticiones:", newton(df, d2f, 0.0001)[1])
+
+if __name__ == "__main__":
+    main()
+
+##Ejercicio 2##
+from random import random
+import random
+from tqdm import tqdm
+import matplotlib.pyplot as plt
+import numpy as np
+
+
+
+class Hotel:
+    def __init__(self, capacity, booking_limit):
+        self.capacity = capacity
+        self.booking_limit = booking_limit
+        # Each reservation will be stored in the following list using 0s and 1s:
+        #   - If it's a reservation from guests that will show up, 1
+        #   - If it's a reservation that will be cancelled, 0
+        self.reservations = []
+    def booked_out(self):
+        """
+        Returns True if the hotel has reached its booking limit, False otherwise
+        """
+        if len(self.reservations) == self.booking_limit:
+            return True
+        else:
+            return False
+    def make_reservation(self, cancelation_prob):
+        """
+        Generates a reservation using the generate_reservation function.
+        Updates the reservations list to include the new reservation.
+        """
+        x=[]
+        for i in range(self.booking_limit):
+            x.append(generate_reservation(cancelation_prob))
+        return x
+    def showups(self):
+        """
+        Returns the number of reservations that show up.
+        """
+        return np.sum(self.reservations)
+    def revenue(self, rate, penalty):
+        """
+        Returns the revenue (net of penalty payments)
+        """
+        return rate*len(self.reservations) - max((rate+penalty)*(np.sum(self.reservations) - self.capacity), 0)
+
+
+def generate_reservation(cancelation_prob):
+    """
+    Return 1 if the guests from the reservation will show up, 0 otherwise.
+    Help: use random() to generate a random float in the 0-1 range.
+    """
+    if np.random.rand(1) >= cancelation_prob:
+        return 1
+    else:
+        return 0
+
+
+def simulate(n, cancelation_prob, capacity, booking_limit, rate, penalty):
+    ret = []
+    for i in range(n):
+        hotel = Hotel(capacity, booking_limit)
+        while not hotel.booked_out():
+            hotel.reservations = hotel.make_reservation(cancelation_prob)
+        ret.append(hotel.revenue(rate, penalty)) 
+    return sum(ret)/len(ret)
+
+
+def plot(x, y):
+    plt.plot(x,y)
+    plt.axvline(x[np.argmax(y)], color="r", linestyle="dashed", label=f"Best booking limit: {x[np.argmax(y)]}")
+    plt.legend()
+    plt.xlabel("Booking limit")
+    plt.ylabel("Average revenue")
+    plt.title("Optimal booking limit")
+    plt.show()
+
+def main():
+    x,y = [],[]
+    for blim in tqdm(range(50, 100)):
+        sim = simulate(
+            n=5000,
+            cancelation_prob=0.4,
+            capacity=50,
+            booking_limit=blim,
+            rate=300,
+            penalty=1000
+        )
+        x.append(blim)
+        y.append(sim)
+    
+    plot(x, y)
+
+if __name__ == "__main__":
+    main()
+
+##Ejercicio 3##
+import requests
+from time import sleep
+from random import random
+from tqdm import tqdm
+import numpy as np
+
+class Scraper:
+    def __init__(self, root, from_currency, to_currency, exchanges):
+        self.root = root # Root of the endpoint
+        self.from_currency = from_currency # Resource
+        self.to_currency = to_currency # Resource
+        self.exchanges = exchanges # List of resources
+        self.spreads = {exchange: [] for exchange in exchanges}
+
+    def _get_spread(self, exchange):
+        req = None
+        url = self.root + "/" + exchange + "/" + self.from_currency + "/" + self.to_currency
+        req = requests.get(url)
+        if req.status_code == 200:
+            content = req.json() #content es todo el diccionario completo.
+            
+            ask = content["ask"]
+            bid = content["bid"]
+            spread = ask - bid 
+
+        return spread
+
+        """
+        Takes an exchange (resource of the API).
+        Generates the string with the enpoint for the request.
+        Makes the request, validating status_code 200.
+        If successful, returns the spread. None otherwise.
+        """
+        
+
+    def get_spreads(self):
+        for exchange in self.exchanges:
+            content = self._get_spread(exchange)
+            self.spreads[exchange].append(content)
+            sleep(0.35 + random())
+        print(self.spreads)
+
+        """
+        Looks for the spread of each exchange.
+        Stores each spread in the corresponding list of dictionary self.spreads
+        Waits 0.35+random() or more between requests.
+        """
+        
+
+    def run(self, n_reps, sleep_for):
+        """
+        Gets spreads n_reps times waiting sleep_for seconds between runs.
+        """
+        counter = 0
+        while counter < n_reps:
+            self.get_spreads()
+            sleep(sleep_for)
+            counter += 1
+
+        pass
+
+def show_metrics(spreads_dict):
+    for k,v in spreads_dict.items():
+        print(k, np.mean(v))
+
+def main():
+    scraper = Scraper(
+        root="https://criptoya.com/api",
+        from_currency="dai",
+        to_currency="ars",
+        exchanges=["buenbit", "lemoncash", "belo"]
+    )
+    
+    
+    scraper.run(n_reps=2, sleep_for=100)
+    scraper.get_spreads()
+    show_metrics(scraper.spreads)
+
+if __name__ == "__main__":
+    main()
