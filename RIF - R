@@ -1,0 +1,330 @@
+#TRABAJO PRÁCTICO DOMICILIARIO NÚMERO 1
+#Candelaria Romero, Federico Wende, Joaquín VanHaezevelde, Roberto Silva
+install.packages("data.table")
+install.packages("tidyverse")
+install.packages("tidyquant")
+
+
+library(tidyverse)
+library(tidyquant)
+library(data.table)
+
+#Inciso 1
+#Con el comando tq_get podemos obtener el vector de las acciones que pedimos, y luego con el comando from y el comando to, restringimos las fechas
+stocks <- tq_get(c("AAPL", "GOOG", "KO", "MCD", "META", "AMZN", "TSLA", "JPM", "CVX", "MELI"), from = "2018-01-01", to = "2021-12-31") 
+view(stocks) 
+
+
+#Inciso 2
+stockwide <- pivot_wider(
+  select(stocks, date, symbol, close),
+  names_from = symbol, values_from= close)
+view(stockwide)
+
+#Inciso 3
+#Con el comando mutate, creamos la variable de los retornos con la diferencia logarrítmiica
+returns <- stockwide %>% 
+  mutate(
+    AAPL_rt = log(AAPL/lag(AAPL)),
+    GOOG_rt = log(GOOG/lag(GOOG)),
+    KO_rt = log(KO/lag(KO)),
+    MCD_rt = log(MCD/lag(MCD)),
+    META_rt = log(META/lag(META)),
+    AMZN_rt = log(AMZN/lag(AMZN)),
+    TSLA_rt = log(TSLA/lag(TSLA)),
+    JPM_rt = log(JPM/lag(JPM)),
+    CVX_rt = log(CVX/lag(CVX)),
+    MELI_rt = log(MELI/lag(MELI)),
+  ) %>% 
+  select(date, ends_with("rt")) #Pedimos que se use solamente los datos terminados en _rt, es decir, sólo los retornos
+view (returns)
+
+#Inciso 4
+ggplot(data = returns)+ #Con el comando ggplot pedimos que haga un gráfico, y aclaramos que la data sea del dataframe de retornos
+  geom_line(mapping = aes(x=date,y=TSLA_rt))+ #Para que quede una linea y no puntos.
+  labs(title = "Retornos Tesla",
+       subtitle = "2018 - 2021",
+       xlab = "Date",
+       ylab = "Return")
+
+
+
+
+ggplot(data = stockwide)+
+  geom_line(mapping = aes(x=date,y=TSLA))+
+  labs(title = "Precio cierre Tesla",
+       subtitle = "2018 - 2021",
+       xlab = "Date",
+       ylab = "Return")
+
+
+
+#Inciso 5
+#Matriz de retornos medios. Transformamos los retornos para que sean promedios.
+rt_avg <- returns %>%
+  mutate(
+    AAPL_rt_avg = mean(AAPL_rt, na.rm=T),
+    GOOG_rt_avg = mean(GOOG_rt, na.rm=T),
+    KO_rt_avg = mean(KO_rt, na.rm=T),
+    MCD_rt_avg = mean(MCD_rt, na.rm=T),
+    META_rt_avg = mean(META_rt, na.rm=T),
+    AMZN_rt_avg = mean(AMZN_rt, na.rm=T),
+    TSLA_rt_avg = mean(TSLA_rt, na.rm=T),
+    JPM_rt_avg = mean(JPM_rt, na.rm=T),
+    CVX_rt_avg = mean(CVX_rt, na.rm=T),
+    MELI_rt_avg = mean(MELI_rt, na.rm=T),
+  ) %>% 
+  select(ends_with("avg"))
+
+rt_avg <- unique(rt_avg) #Eliminamos valores repetidos
+rownames(rt_avg) <- "rt_avg" #renombramos el eje
+view(rt_avg)
+
+
+#Matriz de varianzas y covarianzas
+a <- c(rt_avg) #rt_avg es una observacion de 10 variables, necesitamos un vector numeral para el comando diag
+diag_rt <- diag(a) #diagonalizamos retornos medios para calcular la matriz de var y cov despues
+view(diag_rt)
+
+rt_cov <-  cov(diag_rt) #calculamos la matriz de var y cov
+view(rt_cov)
+
+
+#Inciso 6
+max_rt <- max(rt_avg)
+which(max_rt==rt_avg)
+#TSLA tiene el mejor retorno
+
+min_rt <- min(rt_avg)
+which(min_rt==rt_avg)
+#Chevron tiene el peor retorno
+
+
+stockwide %>%
+  select(date, TSLA, CVX) %>% 
+  pivot_longer(cols = 2:3, names_to = "symbol", values_to = "close") %>% #pasamos a long para poder graficar ambas lineas en un mismo grafico
+  ggplot(aes(x=date, y=close))+
+  geom_line(aes(color=symbol))+
+  labs(title="Precios max/min retornos",
+       subtitle = "2018-2021",
+       xlab= "Date",
+       ylab= "Price")
+
+
+
+#Inciso 7
+#cambiamos primero las fechas a semestre, creando una nueva columna que indica semestre y año. A continuacion eliminamos la columna de fechas.
+returns_semester <- returns %>% 
+  mutate(
+    sem = semester(date, with_year = T),
+    .keep = "unused"
+  )
+view(returns_semester)
+
+
+#creamos un dataframe para cada semestre. Primero filtrando por valores de la variable semestre, luego reutilizando el codigo que ya ecribimos
+#para transformar a retornos medios y dropeando las variables repetidas. Asi obtenemos para cada semestre un vector de 1x11.
+first_sem <- returns_semester %>% 
+  filter(sem==2018.1) %>% 
+  mutate(
+    AAPL_rt_avg = mean(AAPL_rt, na.rm=T),
+    GOOG_rt_avg = mean(GOOG_rt, na.rm=T),
+    KO_rt_avg = mean(KO_rt, na.rm=T),
+    MCD_rt_avg = mean(MCD_rt, na.rm=T),
+    META_rt_avg = mean(META_rt, na.rm=T),
+    AMZN_rt_avg = mean(AMZN_rt, na.rm=T),
+    TSLA_rt_avg = mean(TSLA_rt, na.rm=T),
+    JPM_rt_avg = mean(JPM_rt, na.rm=T),
+    CVX_rt_avg = mean(CVX_rt, na.rm=T),
+    MELI_rt_avg = mean(MELI_rt, na.rm=T)
+  ) %>% 
+  select(sem, ends_with("avg"))
+first_sem <- unique(first_sem)
+
+
+second_sem <- returns_semester %>% 
+  filter(sem==2018.2) %>% 
+  mutate(
+    AAPL_rt_avg = mean(AAPL_rt, na.rm=T),
+    GOOG_rt_avg = mean(GOOG_rt, na.rm=T),
+    KO_rt_avg = mean(KO_rt, na.rm=T),
+    MCD_rt_avg = mean(MCD_rt, na.rm=T),
+    META_rt_avg = mean(META_rt, na.rm=T),
+    AMZN_rt_avg = mean(AMZN_rt, na.rm=T),
+    TSLA_rt_avg = mean(TSLA_rt, na.rm=T),
+    JPM_rt_avg = mean(JPM_rt, na.rm=T),
+    CVX_rt_avg = mean(CVX_rt, na.rm=T),
+    MELI_rt_avg = mean(MELI_rt, na.rm=T)
+  ) %>% 
+  select(sem, ends_with("avg"))
+second_sem <- unique(second_sem)
+
+
+third_sem <- returns_semester %>% 
+  filter(sem==2019.1) %>% 
+  mutate(
+    AAPL_rt_avg = mean(AAPL_rt, na.rm=T),
+    GOOG_rt_avg = mean(GOOG_rt, na.rm=T),
+    KO_rt_avg = mean(KO_rt, na.rm=T),
+    MCD_rt_avg = mean(MCD_rt, na.rm=T),
+    META_rt_avg = mean(META_rt, na.rm=T),
+    AMZN_rt_avg = mean(AMZN_rt, na.rm=T),
+    TSLA_rt_avg = mean(TSLA_rt, na.rm=T),
+    JPM_rt_avg = mean(JPM_rt, na.rm=T),
+    CVX_rt_avg = mean(CVX_rt, na.rm=T),
+    MELI_rt_avg = mean(MELI_rt, na.rm=T)
+  ) %>% 
+  select(sem, ends_with("avg"))
+third_sem <- unique(third_sem)
+
+
+fourth_sem <- returns_semester %>% 
+  filter(sem==2019.2) %>% 
+  mutate(
+    AAPL_rt_avg = mean(AAPL_rt, na.rm=T),
+    GOOG_rt_avg = mean(GOOG_rt, na.rm=T),
+    KO_rt_avg = mean(KO_rt, na.rm=T),
+    MCD_rt_avg = mean(MCD_rt, na.rm=T),
+    META_rt_avg = mean(META_rt, na.rm=T),
+    AMZN_rt_avg = mean(AMZN_rt, na.rm=T),
+    TSLA_rt_avg = mean(TSLA_rt, na.rm=T),
+    JPM_rt_avg = mean(JPM_rt, na.rm=T),
+    CVX_rt_avg = mean(CVX_rt, na.rm=T),
+    MELI_rt_avg = mean(MELI_rt, na.rm=T)
+  ) %>% 
+  select(sem, ends_with("avg"))
+fourth_sem <- unique(fourth_sem)
+
+
+fifth_sem <- returns_semester %>% 
+  filter(sem==2020.1) %>% 
+  mutate(
+    AAPL_rt_avg = mean(AAPL_rt, na.rm=T),
+    GOOG_rt_avg = mean(GOOG_rt, na.rm=T),
+    KO_rt_avg = mean(KO_rt, na.rm=T),
+    MCD_rt_avg = mean(MCD_rt, na.rm=T),
+    META_rt_avg = mean(META_rt, na.rm=T),
+    AMZN_rt_avg = mean(AMZN_rt, na.rm=T),
+    TSLA_rt_avg = mean(TSLA_rt, na.rm=T),
+    JPM_rt_avg = mean(JPM_rt, na.rm=T),
+    CVX_rt_avg = mean(CVX_rt, na.rm=T),
+    MELI_rt_avg = mean(MELI_rt, na.rm=T)
+  ) %>% 
+  select(sem, ends_with("avg"))
+fifth_sem <- unique(fifth_sem)
+
+
+sixth_sem <- returns_semester %>% 
+  filter(sem==2020.2) %>% 
+  mutate(
+    AAPL_rt_avg = mean(AAPL_rt, na.rm=T),
+    GOOG_rt_avg = mean(GOOG_rt, na.rm=T),
+    KO_rt_avg = mean(KO_rt, na.rm=T),
+    MCD_rt_avg = mean(MCD_rt, na.rm=T),
+    META_rt_avg = mean(META_rt, na.rm=T),
+    AMZN_rt_avg = mean(AMZN_rt, na.rm=T),
+    TSLA_rt_avg = mean(TSLA_rt, na.rm=T),
+    JPM_rt_avg = mean(JPM_rt, na.rm=T),
+    CVX_rt_avg = mean(CVX_rt, na.rm=T),
+    MELI_rt_avg = mean(MELI_rt, na.rm=T)
+  ) %>% 
+  select(sem, ends_with("avg"))
+sixth_sem <- unique(sixth_sem)
+
+
+seventh_sem <- returns_semester %>% 
+  filter(sem==2021.1) %>% 
+  mutate(
+    AAPL_rt_avg = mean(AAPL_rt, na.rm=T),
+    GOOG_rt_avg = mean(GOOG_rt, na.rm=T),
+    KO_rt_avg = mean(KO_rt, na.rm=T),
+    MCD_rt_avg = mean(MCD_rt, na.rm=T),
+    META_rt_avg = mean(META_rt, na.rm=T),
+    AMZN_rt_avg = mean(AMZN_rt, na.rm=T),
+    TSLA_rt_avg = mean(TSLA_rt, na.rm=T),
+    JPM_rt_avg = mean(JPM_rt, na.rm=T),
+    CVX_rt_avg = mean(CVX_rt, na.rm=T),
+    MELI_rt_avg = mean(MELI_rt, na.rm=T)
+  ) %>% 
+  select(sem, ends_with("avg"))
+seventh_sem <- unique(seventh_sem)
+
+
+eighth_sem <- returns_semester %>% 
+  filter(sem==2021.2) %>% 
+  mutate(
+    AAPL_rt_avg = mean(AAPL_rt, na.rm=T),
+    GOOG_rt_avg = mean(GOOG_rt, na.rm=T),
+    KO_rt_avg = mean(KO_rt, na.rm=T),
+    MCD_rt_avg = mean(MCD_rt, na.rm=T),
+    META_rt_avg = mean(META_rt, na.rm=T),
+    AMZN_rt_avg = mean(AMZN_rt, na.rm=T),
+    TSLA_rt_avg = mean(TSLA_rt, na.rm=T),
+    JPM_rt_avg = mean(JPM_rt, na.rm=T),
+    CVX_rt_avg = mean(CVX_rt, na.rm=T),
+    MELI_rt_avg = mean(MELI_rt, na.rm=T)
+  ) %>% 
+  select(sem, ends_with("avg"))
+eighth_sem <- unique(eighth_sem)
+
+
+#Unificamos los 8 vecotres de 1x11 en uno unico con el comando merge. Como merge solo puede juntar 2 data frames, usamos el comando varias veces.
+ab <- merge(first_sem, second_sem, all = T)
+cd <- merge(third_sem, fourth_sem, all = T)
+ef <- merge(fifth_sem, sixth_sem, all = T)
+gh <- merge(seventh_sem, eighth_sem, all = T)
+abcd <- merge(ab, cd, all = T)
+efgh <- merge(ef, gh, all = T)
+rt_avg_bysem <- merge(abcd, efgh, all = T)
+view(rt_avg_bysem)
+
+#Podemos observar que los retornos medios cambian mucho con los semestres, la mayoría de las acciones tuvieron semestres con retornos medios negativos,
+#pero en el agregado, solo una accion perdio valor. Esto nos permite que en el mediano plazo nuestra acciones tienden a crecer lentamente mientras que
+#en el corto plazo pueden crecer mas rapido o hasta decrecer.
+
+#Inciso 8
+#Los resultados del inciso 7 nos demuestran que los resultados del pasado pueden ser muy utiles para una estrategia a futuro. Pero como los usamos y
+#cuales va a depender de nuestra estrategia de inversion. Si planeamos invertir a mediano plazo nos va a ser mas util estudiar las tendencias a mediano
+#plazo de las accioens de nuestro portafolio, ya que en el corto plazo pueden oscilar de manera sorpresiva. Si la estrategia es de corto plazo, conviene
+#usar datos de rendimientos recientes y es importante considerar que hay una volatilidad mas grande.
+
+
+
+#Inciso 9
+#Elegimos TSLA para este inciso. Elegimos quedarnos con las fechas y los retornos de TSLA, despues creamos variables neuvas con el comando rollapply
+#que arma los resultados de la funcion especificada tomando los n valores (60 en este caso) anteriores de la variable especificada. Creamos entonces
+#variables para el promedio y desvio moviles a 60 dias. Luego graficamos. Notar que no se pueden calcular promedios para los primeros 60 dias ya que no
+#hay 60 dias previos para promediar.
+TSLA_mobile <- returns %>% 
+  select(date, TSLA_rt) %>%
+  mutate(mobileavg = rollapply(TSLA_rt, width=60, FUN=mean, fill=NA, align="r"),
+         mobilesd = rollapply(TSLA_rt, width=60, FUN=sd, fill=NA, align="r")
+  )
+view(TSLA_mobile)
+
+TSLA_mobile %>% 
+  select(date, mobileavg) %>% 
+  ggplot(aes(x=date, y=mobileavg))+
+  geom_line(color="red")+
+  labs(title="TESLA mobile mean_rt",
+       subtitle = "2018-2021",
+       xlab= "Date",
+       ylab= "mobile mean returns")
+
+
+
+TSLA_mobile %>% 
+  select(date, mobilesd) %>% 
+  ggplot(aes(x=date, y=mobilesd))+
+  geom_line(color="green")+
+  labs(title="TESLA mobile sd",
+       subtitle = "2018-2021",
+       xlab= "Date",
+       ylab= "mobile sd")
+
+
+#Podemos ver en el grafico de medias que el crecimeitno promedio movil fue mas alto en el periodo 2020-2021, esto nos indica que este es el periodo
+#donde mas crecio el valor de la accion. En el grafico de los desvios moviles podemos observar que este mismo periodo de tiempo es el que presenta
+#mayores desvios moviles, lo cual es consistente ya que es cuando mas variaron los retornos.
+
+
