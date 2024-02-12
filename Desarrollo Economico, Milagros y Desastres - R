@@ -1,0 +1,173 @@
+library(readxl)
+library(tidyverse)
+
+datos <- read_excel("C:/Users/Gebruiker/Downloads/pwt1001.xlsx", 
+                      sheet = "Data")
+alpha <- 1/3
+s <- (datos$cda-datos$ccon)/datos$cgdpo
+a <- ((datos$cgdpo)/(((datos$cn)**alpha)*(datos$hc*datos$emp)**(1-alpha)))**(1/(1-alpha))
+
+datos <- mutate(datos, a, s)
+
+##USA
+USA <- datos%>%filter(countrycode == "USA")
+USAxxi <- USA %>% filter(year>=2000)
+
+
+##FUNCION
+f <- function(z, alpha = 1/3){
+  
+  
+  datos <- read_excel("C:/Users/Gebruiker/Downloads/pwt1001.xlsx", 
+                      sheet = "Data")
+  
+  h <- datos$hc
+  k <- datos$cn / (datos$emp)
+  y <- datos$cgdpo / datos$emp
+  alpha <- 1/3
+  #s es la absorcion domestica - consumo domestico como porcentaje del pib
+  s <- (datos$cda-datos$ccon)/datos$cgdpo
+  a <- ((datos$cgdpo)/(((datos$cn)**alpha)*(datos$hc*datos$emp)**(1-alpha)))**(1/(1-alpha))
+  
+  datos <- mutate(datos, a, s)
+  
+  
+  
+  country <- datos%>%filter(countrycode == z)
+  lm(log(country$cgdpo)~(country$year))
+  g <- data.frame(lm(log(country$a)~(country$year))[1])[2,1]
+  g <- matrix(g, nrow = 70, ncol = 1)
+  
+  n <- c()
+  for (i in 1:70){n[i] = (country$pop[i]/country$pop[i-1])-1}
+  s <- country$s
+  delta <- country$delta
+  a <- country$a
+  h <- country$hc
+  
+  steady_state <- a*h*(s/(delta+g+n))**(alpha/(1-alpha))
+  gdpworker <- country$cgdpo/country$emp
+  country <- mutate(country, steady_state, gdpworker, n, g)
+  return(country)
+}
+
+
+##
+##DESASTRES##
+##
+
+
+#Zimbabwe
+#Notar que el g es negativo
+zimbabwe <- f("ZWE")
+zimbabwexxi <- zimbabwe %>% filter(year>=2000)
+
+
+
+ggplot(data = zimbabwe) + geom_line(mapping = aes(x = year, y = steady_state/(USA$cgdpo/USA$emp),color = "SS Y"), size = 1) +
+  geom_line(mapping = aes(x = year, y = (cgdpo/emp)/(USA$cgdpo/USA$emp), color="observed Y"), size = 1) +
+  ggtitle("Zimbabwe stationary state vs real gdp/worker as a % of the USA") +
+  ylab("% of USA gdp/worker") +
+  xlab("Year")
+
+
+ggplot(data = zimbabwexxi) + geom_line(mapping = aes(x = year, y = steady_state/(USAxxi$cgdpo/USAxxi$emp),color = "SS Y"), size = 1) +
+  geom_line(mapping = aes(x = year, y = (cgdpo/emp)/(USAxxi$cgdpo/USAxxi$emp),color="observed Y"), size = 1) +
+  ggtitle("Zimbabwe stationary state vs real gdp/worker as a % of the USA post 2000") +
+  ylab("% of USA gdp/worker") +
+  xlab("Year")
+
+
+ggplot(data = zimbabwe) + geom_line(mapping = aes(x=year, y = a)) +
+  ggtitle("Zimbabwe A parameter")
+
+
+ggplot(data = zimbabwe) + geom_line(mapping = aes(x=year, y = s)) +
+  ggtitle("Zimbabwe s parameter")
+
+
+
+
+##Japon
+japan <- f("JPN")
+
+ggplot(data = japan) + geom_line(mapping = aes(x = year, y = steady_state/(USA$cgdpo/USA$emp), color = "SS Y"), size = 1) +
+  geom_line(mapping = aes(x = year, y = (cgdpo/emp)/(USA$cgdpo/USA$emp), color="observed Y"), size = 1) +
+  ggtitle("Japan stationary state vs real gdp/worker as a % of the USA") +
+  ylab("% of USA gdp/worker") +
+  xlab("Year")
+
+ggplot(data = japan) + geom_line(mapping = aes(x=year, y = a)) +
+  ggtitle("Japan A parameter")
+
+
+ggplot(data = japan) + geom_line(mapping = aes(x=year, y = n)) +
+  ggtitle("Japan n parameter")
+
+
+ggplot(data = japan) + geom_line(mapping = aes(x=year, y = s)) +
+  ggtitle("Japan s parameter")
+
+
+
+
+##
+##MILAGROS##
+##
+
+
+
+#China
+china <- f("CHN")
+
+ggplot(data = china) + geom_line(mapping = aes(x = year, y = steady_state/(USA$cgdpo/USA$emp), color = "SS Y"), size = 1) +
+  geom_line(mapping = aes(x = year, y = (cgdpo/emp)/(USA$cgdpo/USA$emp), color="observed Y"), size = 1) +
+  ggtitle("China stationary state vs real gdp/worker as a % of the USA") +
+  ylab("% of USA gdp/worker") +
+  xlab("Year")
+
+ggplot(data = china) + geom_line(mapping = aes(x=year, y = n)) +
+  ggtitle("China n parameter")
+
+ggplot(data = china) + geom_line(mapping = aes(x=year, y = a)) +
+  ggtitle("China a parameter")
+
+ggplot(data = china) + geom_line(mapping = aes(x=year, y = s)) +
+  ggtitle("China s parameter")
+
+
+#Pakistan
+pakistan <- f("PAK")
+
+ggplot(data = pakistan) + geom_line(mapping = aes(x = year, y = steady_state/(USA$cgdpo/USA$emp), color = "SS Y"), size = 1) +
+  geom_line(mapping = aes(x = year, y = (cgdpo/emp)/(USA$cgdpo/USA$emp), color="observed Y"), size = 1) +
+  ggtitle("Pakistan stationary state vs real gdp/worker as a % of the USA") +
+  ylab("% of USA gdp/worker") +
+  xlab("Year")
+
+
+            
+#Bangladesh
+bangladesh <- f("BGD")
+
+ggplot(data = bangladesh) + geom_line(mapping = aes(x = year, y = steady_state/(USA$cgdpo/USA$emp), color = "SS Y"), size = 1) +
+  geom_line(mapping = aes(x = year, y = (cgdpo/emp)/(USA$cgdpo/USA$emp), color="observed Y"), size = 1) +
+  ggtitle("Bangladesh stationary state vs real gdp/worker as a % of the USA") +
+  ylab("% of USA gdp/worker") +
+  xlab("Year")
+
+
+#India
+india <- f("IND")
+
+ggplot(data = india) + geom_line(mapping = aes(x = year, y = steady_state/(USA$cgdpo/USA$emp), color = "SS Y"), size = 1) +
+  geom_line(mapping = aes(x = year, y = (cgdpo/emp)/(USA$cgdpo/USA$emp), color="observed Y"), size = 1) +
+  ggtitle("India stationary state vs real gdp/worker as a % of the USA") +
+  ylab("% of USA gdp/worker") +
+  xlab("Year")
+
+
+
+
+
+  
