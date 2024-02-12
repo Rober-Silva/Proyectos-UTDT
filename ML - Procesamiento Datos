@@ -1,0 +1,848 @@
+library(tidyverse)
+library(glmnet)
+library(ROCR)
+library(rpart)
+library(rpart.plot)
+library(randomForest)
+library(rgl)
+library(factoextra)
+library(MASS)
+library(e1071)
+library(gbm)
+load("D:/UTDT/8vo Semestre/Machine Learning/Proyecto final/DatosLimpios.RData")
+options(scipen = 999)
+
+#Calculamos %NAs de cada covariable
+naprct <- c()
+for (i in 1:length(data)) {
+  naprct <- c(naprct, ifelse(length(which(is.na(data[,i])))>0, length(which(is.na(data[,i])))/length(data[,1]), 0)
+)
+}
+
+
+###=======================================================================================###
+###=======================================================================================###
+##MODELOS LOGIT/PROBIT##
+##logit/probit(%NAs, prediccion)
+##prediccion = "drugevr", "drugrec", "druglyr"
+logit <- function(umbral, prediccion){
+  a <- data[,which(naprct<=umbral)]
+  a <- a[complete.cases(a),]
+  b <- a[,which(colnames(data)==as.character(prediccion))]
+  a <- a[,c(-1,-2,-3)]
+  a <- data.frame(b, a)
+  
+  id.train <- sample(length(a[,1]), round(length(a[,1])/2)) 
+  train.logit <- glm(b ~ .,
+                     data = a,
+                     subset = id.train,
+                     family = binomial(link="logit"),
+                     maxit = 5)
+  
+  pred.train = predict(train.logit, type = "response")
+  pred.test = predict(train.logit, newdata = a[-id.train,], type="response")
+  
+  pred2 <- prediction(as.matrix(pred.test), a[-id.train,1])
+  auc2 <- performance(pred2, "auc")
+  auc <- sprintf("%.3f", as.numeric(auc2@y.values)) 
+  
+  pred.test[pred.test>=0.5] = 1
+  pred.test[pred.test<0.5] = 0
+  
+  acierto <- sprintf("%.2f",length(which(pred.test==a$b[-id.train]))/length(pred.test)*100)
+  print(table(pred.test, a[-id.train,1]))
+  print(paste0("tasa de acierto:", acierto, "%"))
+  print(paste0("AUC:", auc))
+  
+}
+system.time(logit(0.5, "druglyr"))
+logit(0.05, "druglyr")
+#auc=0.66
+
+probit <- function(umbral, prediccion){
+  a <- data[,which(naprct<=umbral)]
+  a <- a[complete.cases(a),]
+  b <- a[,which(colnames(data)==as.character(prediccion))]
+  a <- a[,c(-1,-2,-3)]
+  a <- data.frame(b, a)
+  
+  id.train <- sample(length(a[,1]), round(length(a[,1])/2)) 
+  train.probit <- glm(b ~ .,
+                     data = a,
+                     subset = id.train,
+                     family = binomial(link="probit"),
+                     maxit = 20)
+  
+  pred.train = predict(train.probit, type = "response")
+  pred.test = predict(train.probit, newdata = a[-id.train,], type="response")
+  
+  pred2 <- prediction(as.matrix(pred.test), a[-id.train,1])
+  auc2 <- performance(pred2, "auc")
+  auc <- sprintf("%.3f", as.numeric(auc2@y.values)) 
+  
+  pred.test[pred.test>=0.5] = 1
+  pred.test[pred.test<0.5] = 0
+  
+  acierto <- sprintf("%.2f",length(which(pred.test==a$b[-id.train]))/length(pred.test)*100)
+  #aciertodrg <- sprintf("%.2f",length(which(pred.test==1 & a$b[-id.train] == 1))/length(which(a$b[-id.train] == 1))*100)
+  print(table(pred.test, a[-id.train,1]))
+  print(paste0("tasa de acierto:", acierto, "%"))
+  #print(paste0("tasa de aciertodrg:", aciertodrg, "%"))
+  print(paste0("AUC:", auc))
+}
+probit(0.05, "druglyr")
+#auc=0.84, pero el algoritmo no converge
+#auc=0.579 si subo maxit. Resultado 0.84 poco robusto
+
+#load("D:/UTDT/8vo Semestre/Machine Learning/Proyecto final/DatosLOGITPROBIT.RData")
+
+
+
+###=======================================================================================###
+###=======================================================================================###
+##ELASTIC NETS(RIDGE & LASSO)##
+#VC con 20*5 modelos, alpha = c(0, 0.25, 0.5, 0.75, 1), lambda = 10^seq(1, -2, length = 20))
+#Enet calcula todos los propensity scores para distintos combos enet, devuelve mejor comb de enet basado en AUC
+#Tarda mucho en correr, dejar datos guardados p/ umbral 0.00, 0.05, 0.20
+enet <- function(umbral, prediccion){
+  a <- data[,which(naprct<=umbral)]
+  a <- a[complete.cases(a),]
+  b <- a[,which(colnames(data)==as.character(prediccion))]
+  a <- a[,c(-1,-2,-3)]
+  a <- data.frame(b, a)
+  
+  id.train <- sample(length(a[,1]), round(length(a[,1])/2))
+  comb <- expand.grid(c(0, 0.25, 0.5, 0.75, 1), 10^seq(1, -2, length = 20))
+  acierto <- matrix()
+  trueneg <- matrix()
+  pred.train = data.frame(matrix(NA, nrow = length(id.train), ncol = length(comb[,1])))
+  for (i in 1:length(comb[,1])) { 
+    train.enet = glmnet(x = a[id.train,-1], 
+                        y = a[id.train,1],
+                        family = 'binomial',  #Binomial p/ logit
+                        alpha = comb[i, 1],
+                        lambda = comb[i, 2],
+                        thresh = 0.0001)
+    
+    pred.train[,i] = predict(train.enet ,newx = as.matrix(a[id.train, -1]),type = "response", s = "lambda.min")
+    if(i%%5==0) {print(i)} }
+  
+  auc <- c()
+  for (i in 1:length(comb[,1])) {
+    pred2 <- prediction(as.matrix(pred.train[,i]), a[id.train,1])
+    auc2 <- performance(pred2, "auc")
+    auc[i] <- as.numeric(auc2@y.values)
+  }
+  which.max(auc)
+  bestcomb = comb[which.max(auc),]
+  colnames(bestcomb) <- c("alpha", "lambda")
+  
+  espec <- function(bestcomb){
+    train.enet = glmnet(x = a[id.train,-1], 
+                        y = a[id.train,1], 
+                        family = 'binomial',  #Binomial p/ logit
+                        alpha = bestcomb[, 1],
+                        lambda = bestcomb[, 2])
+    
+    pred.test = predict(train.enet ,newx = as.matrix(a[-id.train, -1]), type = "response", s = "lambda.min")
+    
+    pred2 <- prediction(as.matrix(pred.test), a[-id.train,1])
+    auc2 <- performance(pred2, "auc")
+    aucreal <- as.numeric(auc2@y.values)
+    
+    
+    #Ahora tengo que armar especificidad y todo eso y elegir que quiero definir como optimo
+    especificidad <- seq(0.01, 0.99, length=100)
+    acierto <- matrix(nrow = length(especificidad), ncol = 1)
+    trueneg <- matrix(nrow = length(especificidad), ncol = 1)
+    truepos <- matrix(nrow = length(especificidad), ncol = 1)
+    
+    for (i in 1:length(especificidad)) {
+      pred.test2 <- pred.test
+      pred.test2[pred.test2>=especificidad[i]] = 1
+      pred.test2[pred.test2<especificidad[i]] = 0
+      acierto[i] <- length(which(pred.test2==a$b[-id.train]))/length(pred.test2)
+      trueneg[i] <- length(which(a$b[-id.train]==0 & pred.test2==0))/length(which(pred.test2==0))
+      truepos[i] <- length(which(a$b[-id.train]==1 & pred.test2==1))/length(which(pred.test2==1))
+    }
+    falseneg <- 1-trueneg
+    falsepos <- 1-truepos
+    
+    #Calculamos el F
+    prec <- truepos/(truepos+falsepos) #Cuantos de los diagnosticados drogadict efectivamente lo son
+    rec <- truepos/(truepos+falseneg)
+    beta = 1 #De finiendo Beta puedo determinar el optimo, cuanto más grande Beta más precisión
+    FBeta <- (1+beta^2)*(prec*rec)/((prec*beta^2)+rec)
+    which(max(FBeta, na.rm=T)==FBeta)
+    
+    pred.test2 <- pred.test
+    pred.test2[pred.test2>=especificidad[which(max(FBeta, na.rm=T)==FBeta)]] = 1
+    pred.test2[pred.test2<especificidad[which(max(FBeta, na.rm=T)==FBeta)]] = 0
+    table(pred.test2, a[-id.train,1])
+    
+    
+    ##Likelihood
+    S <- truepos
+    E <- trueneg
+    pos.likehood <- S/(1-E) #Cada cuantas personas diagnositcadas positivas hay un falso pos
+    neg.likehood <- (1-S)/E #Cada cuantas personas diagnosticadas negativo hay un falso neg
+    data.frame(pos.likehood, neg.likehood)
+    
+    ##Criterio propio(cents on the dollar = COTD)
+    avgadicts <- length(which(a$b[-id.train]==1))/length(a$b[-id.train]) #%drogadictos totales
+    #Si yo le otorgo aleatoreamente un tratamiento a un % de la población voy a tener a ese porcentaje tratados
+    cotd <- function(pred.train){
+      tratados = matrix(NA, nrow = length(especificidad))
+      drogtratados = matrix(NA, nrow = length(especificidad))
+      costo = matrix(NA, nrow = length(especificidad))
+      for (i in 1:length(especificidad)) {
+        pred.test2 <- pred.test
+        pred.test2[pred.test2>=especificidad[i]] = 1
+        pred.test2[pred.test2<especificidad[i]] = 0
+        
+        tratados[i] = length(which(pred.test2==1))
+        poblacion = length(a$b[-id.train])
+        drogtratados[i] = length(which(pred.test2==1 & a$b[-id.train]==1))
+        drogadictos = length(which(a$b[-id.train]==1))  
+        
+        costo[i] = (tratados[i]/poblacion) / (drogtratados[i]/drogadictos) #Costo por cada drogadicto al que le llega tratamiento
+      }
+      
+      
+      return(data.frame(trtpop = c(tratados/poblacion),trtdrg = c(drogtratados/drogadictos), cotd = c(costo)))
+    }
+    cotd.data<- cotd(pred.train)
+    cotd.data <- data.frame(cotd.data, especificidad)
+    #Si yo con mi test trato a un porcentaje menor, pero llego a un porcentaje mayor de los adictos es genial
+    
+    #Imaginemos una campaña de publicidad en redes sociales, donde se puede elegir el target
+    #Con especificidad 0.15, puedo dar publicidad al 16% de la pob y hacerla llegar al 70% de los adictos
+    #Para que le llegue al 70% de los adictos con distrib aleatoria tendría que targetear al 70%
+    #Cuanto más cercano al 100% de drogadictos, menor será la diferencia en costo
+    
+    #Puedo definir tratamientos intensivos/caros vs tratamientos grales/baratos
+    #TRAT DURO CON CRITERIOS LR+/LR-, LR+>10 y LR-<0.1
+    #TRAT LEVE CON CRITERIO COSTO, DETERMINAR %DRGADCT O COTD Y VIVIR CON EL OTRO 
+  }
+  
+  criterio = data.frame()
+  criterio = espec(bestcomb)
+  
+  cotd.graph <- function(cotd.data){
+    par(pty="s")                             
+    plot(x = cotd.data$trtdrg, y = cotd.data$cotd, xlab = "treated of drgpop", ylab = "cotd", main="COTD", col="red", lwd=1) # Curva ROC datos test.
+    abline(0,1, lwd=2.5)
+  }
+  
+  
+  rocplot <- function(pred2){
+    par(pty="s")                             
+    plot(performance(pred2,"tpr","fpr"), main="Curva ROC: E-Nets", col="blue", yaxs="i", xaxs="i", lwd=8) # Curva ROC datos test.
+    abline(0,1, lwd=2.5)
+    }
+  rocplot(pred2)
+  print(paste0("enets auc:", max(auc)))
+  #Armar 2 table con las distintas especificidades
+}
+
+  
+#load("D:/UTDT/8vo Semestre/Machine Learning/Proyecto final/Ridgex100NA00.RData")
+#load("D:/UTDT/8vo Semestre/Machine Learning/Proyecto final/Ridgex100NA05.RData")
+#load("D:/UTDT/8vo Semestre/Machine Learning/Proyecto final/Ridgex100NA15.RData")
+
+#00 <- aucreal=0.857;  05 <- aucreal=0.862;  15 <- aucreal=0.868
+
+
+###=======================================================================================###
+###=======================================================================================###
+##Principal components analysis(PCA)##
+#Reducimos dimensionalidad
+#Busca maximizar la varianza y despues diferencias en distribución
+#En los enets vimos que ridge funcionaba mejor que lasso, esto sugiere que mis variables correlaciona fuertemente
+#Ayuda a reducir problemas de multicolinealidad y dimensionalidad, los dos que enfrentamos
+
+pca <- function(prediccion, varpct){
+  
+  a <- data[,which(naprct<=0)]
+  a <- a[complete.cases(a),]
+  b <- a[,which(colnames(data)==as.character(prediccion))]
+  a <- a[,c(-1,-2,-3)]
+  a <- data.frame(b, a) 
+  a <- a[, apply(a, 2, function(x) var(x, na.rm = TRUE) > 0)] #eliminamos cols sin varianza
+  pca00 <- prcomp(a[,-1], scale = TRUE, center = TRUE, retx = TRUE) 
+  
+  fviz_eig(pca00) #Grafico de variabilidad explicada
+  cumvar00 = cumsum(pca00$sdev^2) / sum(pca00$sdev^2) #Variabilidad explicada acumulada
+  plot(cumvar00, type = 'b', main ='Varianza acumulada', ylab = '', xlab = 'm') #Grafico de lo anterior
+  
+  
+  a <- data[,which(naprct<=0.05)]
+  a <- a[complete.cases(a),]
+  b <- a[,which(colnames(data)==as.character(prediccion))]
+  a <- a[,c(-1,-2,-3)]
+  a <- data.frame(b, a) 
+  a <- a[, apply(a, 2, function(x) var(x, na.rm = TRUE) > 0)] #eliminamos cols sin varianza
+  pca05 <- prcomp(a[,-1], scale = TRUE, center = TRUE, retx = TRUE) 
+  
+  fviz_eig(pca05) #Grafico de variabilidad explicada
+  cumvar05 = cumsum(pca05$sdev^2) / sum(pca05$sdev^2) #Variabilidad explicada acumulada
+  plot(cumvar05, type = 'b', main ='Varianza acumulada de PCA', ylab = 'varianza acumulada', xlab = 'm') #Grafico de lo anterior
+  
+  
+  a <- data[,which(naprct<=0.15)]
+  a <- a[complete.cases(a),]
+  b <- a[,which(colnames(data)==as.character(prediccion))]
+  a <- a[,c(-1,-2,-3)]
+  a <- data.frame(b, a) 
+  a <- a[, apply(a, 2, function(x) var(x, na.rm = TRUE) > 0)] #eliminamos cols sin varianza
+  pca15 <- prcomp(a[,-1], scale = TRUE, center = TRUE, retx = TRUE) 
+  
+  fviz_eig(pca15) #Grafico de variabilidad explicada
+  cumvar15 = cumsum(pca15$sdev^2) / sum(pca15$sdev^2)
+  plot(cumsum(pca15$sdev^2) / sum(pca15$sdev^2), type = 'b', main ='Varianza acumulada', ylab = '', xlab = 'm') #Grafico de var acumulada
+  
+  varpct70 = c(which(min(cumvar00[cumvar00 > 0.7])==cumvar00), which(min(cumvar05[cumvar05 > 0.7])==cumvar05), which(min(cumvar15[cumvar15 > 0.7])==cumvar15))
+  varpct90 = c(which(min(cumvar00[cumvar00 > 0.9])==cumvar00), which(min(cumvar05[cumvar05 > 0.9])==cumvar05), which(min(cumvar15[cumvar15 > 0.9])==cumvar15))
+  pcaumbrales <- data.frame(c(0, .05, .15), varpct70, varpct90)
+  colnames(pcaumbrales) <- c("NApct", "varpct70", "varpct90")
+  return()
+  }
+
+#load("D:/UTDT/8vo Semestre/Machine Learning/Proyecto final/PCA.RData")
+ 
+
+###=======================================================================================###
+###=======================================================================================###
+##CART(Arboles)##
+
+cart <- function(prediccion){
+  a <- data
+  b <- a[,which(colnames(data)==as.character(prediccion))]
+  a <- data[,c(-1,-2,-3)]
+  a <- data.frame(b, a)
+  
+  id.train <- sample(length(a[,1]), round(length(a[,1])/2))
+  set.seed(24)
+  tree.train <- rpart(b ~ ., 
+                      data=a,
+                      subset = id.train,
+                      method="class",                        
+                      parms = list( split = "gini"),         # Métrica con la que determinan los cortes.
+                      control= rpart.control(minsplit = 1, # Cantidad minima de observaciones en nodo (antes de partir)
+                                             xval = 5,            # cantidad de folds de validación
+                                             cp = 0.0005,           # Umbral de mejora mínima (equivale a "alpha" en escala [0,1]).
+                                             maxdepth = 30,        # Longitud maxima del arbol.
+                                             maxsurrogate = 5,
+                                             usesurrogate = 2)     # ?rpart.control (https://www.rdocumentation.org/packages/rpart/versions/4.1.16/topics/rpart.control).
+  )
+  
+  #Folds hacen que resultados no sean consistentes? preguntar que onda
+  #Siempre cambian cuando vuelvo a correr el arbol
+  tree.train$cptable[which.min(tree.train$cptable[, "xerror"]), "CP"] #CP de VC
+  
+  podado <- prune(tree.train, cp = tree.train$cptable[which.min(tree.train$cptable[, "xerror"]), "CP"])
+  pred.tree = predict(podado, type='class', newdata = a[-id.train, -1]) #Para que asigne automatico, 0.5
+  table(pred.tree, a[-id.train,1])
+  
+  #pred.tree = predict(podado, type='prob') #Para ver el propensity score
+  #x11(); rpart.plot(podado, type = 2, cex=0.75)
+  
+  
+  pred2 <- prediction(as.matrix(as.numeric(pred.tree)), a[-id.train,1])
+  auc2 <- performance(pred2, "auc")
+  auc <- as.numeric(auc2@y.values)
+  print(auc)
+  
+}
+system.time(cart("druglyr"))
+#auc=0.62
+
+cart2 <- function(umbral, prediccion){
+  a <- data[,which(naprct<=umbral)]
+  a <- a[complete.cases(a),]
+  b <- a[,which(colnames(data)==as.character(prediccion))]
+  a <- a[,c(-1,-2,-3)]
+  a <- data.frame(b, a)
+  a$b <- as.factor(a$b)
+  
+  id.train <- sample(length(a[,1]), round(length(a[,1])/2))
+  pred.test2 <- matrix(NA, ncol = 1, nrow = length(a$b[-id.train]))
+  ranfor <- randomForest(b~.,
+                         data=a[id.train,],
+                         #mtry = length(a)-1 , #(si m = cantidad features entonces estamos haciendo Bagging)
+                         ntree=1,     # B
+                         #sample = round(length(a[,1])/2), # tamaño de cada re-muestra bootstrap.
+                         maxnodes = 250,  # cantidad máxima de nodos terminales en c/ árbol.
+                         nodesize = 1, # cantidad mínima de datos en nodo terminal.
+                         importance=T)   # Computar importancia de c/ covariable.
+  
+  pred.test.proxy = predict(ranfor, newdata = a[-id.train, -1], type="prob")
+  pred.test2 = pred.test.proxy[,2]
+  
+  pred2 <- prediction(as.matrix(as.numeric(pred.test2)), a[-id.train,1])
+  auc2 <- performance(pred2, "auc")
+  auc <- as.numeric(auc2@y.values)
+  print(auc)
+  
+}
+#Este usa randomForest en vez de rpart, y es un arbol considerablemente más largo.
+#auc=0.58
+
+
+
+cart.pca <- function(umbral, prediccion){
+  a <- data[,which(naprct<=umbral)]
+  a <- a[complete.cases(a),]
+  b <- a[,which(colnames(data)==as.character(prediccion))]
+  a <- as.data.frame(cbind(b, pca05$x))
+  
+  umbrales = c(0, .05, .15)
+  
+  id.train <- sample(length(a[,1]), round(length(a[,1])/2))
+  set.seed(24)
+  tree.train <- rpart(b ~ ., 
+                      data=a[,1:(1+pcaumbrales$varpct70[which(umbrales==umbral)])],
+                      subset = id.train,
+                      method="class",                        
+                      parms = list( split = "gini"),         # Métrica con la que determinan los cortes.
+                      control= rpart.control(minsplit = 1, # Cantidad minima de observaciones en nodo (antes de partir)
+                                             xval = 5,            # cantidad de folds de validación
+                                             cp = 0.0005,           # Umbral de mejora mínima (equivale a "alpha" en escala [0,1]).
+                                             maxdepth = 30,        # Longitud maxima del arbol.
+                                             maxsurrogate = 5,
+                                             usesurrogate = 2)     # ?rpart.control (https://www.rdocumentation.org/packages/rpart/versions/4.1.16/topics/rpart.control).
+  )
+  
+  #Folds hacen que resultados no sean consistentes? preguntar que onda
+  #Siempre cambian cuando vuelvo a correr el arbol
+  tree.train$cptable[which.min(tree.train$cptable[, "xerror"]), "CP"] #CP de VC
+  
+  podado <- prune(tree.train, cp = tree.train$cptable[which.min(tree.train$cptable[, "xerror"]), "CP"])
+  pred.tree = predict(podado, type='class', newdata = a[-id.train, -1]) #Para que asigne automatico, 0.5
+  table(pred.tree, a[-id.train,1])
+  
+  #pred.tree = predict(podado, type='prob') #Para ver el propensity score
+  #x11(); rpart.plot(podado, type = 2, cex=0.75)
+  
+  
+  pred2 <- prediction(as.matrix(as.numeric(pred.tree)), a[-id.train,1])
+  auc2 <- performance(pred2, "auc")
+  auc <- as.numeric(auc2@y.values)
+  print(auc)
+  #0.608 auc, tarda 1/3 del tiempo!
+  
+}
+system.time(cart.pca(0.05, "druglyr"))
+
+cart.pca2 <- function(umbral, prediccion){
+  a <- data[,which(naprct<=umbral)]
+  a <- a[complete.cases(a),]
+  b <- a[,which(colnames(data)==as.character(prediccion))]
+  a <- as.data.frame(cbind(b, pca05$x))
+  a$b <- as.factor(a$b)
+  
+  umbrales = c(0, .05, .15)
+  id.train <- sample(length(a[,1]), round(length(a[,1])/2))
+  pred.test2 <- matrix(NA, ncol = 1, nrow = length(a$b[-id.train]))
+  set.seed(24)
+  ranfor <- randomForest(b~.,
+                         data=a[id.train,1:(1+pcaumbrales$varpct70[which(umbrales==umbral)])],
+                         #mtry = length(a)-1 , #(si m = cantidad features entonces estamos haciendo Bagging)
+                         ntree=1,     # B
+                         #sample = round(length(a[,1])/2), # tamaño de cada re-muestra bootstrap.
+                         maxnodes = 250,  # cantidad máxima de nodos terminales en c/ árbol.
+                         nodesize = 1, # cantidad mínima de datos en nodo terminal.
+                         importance=T)   # Computar importancia de c/ covariable.
+  
+  pred.test.proxy = predict(ranfor, newdata = a[-id.train, -1], type="prob")
+  pred.test2 = pred.test.proxy[,2]
+  
+  pred2 <- prediction(as.matrix(as.numeric(pred.test2)), a[-id.train,1])
+  auc2 <- performance(pred2, "auc")
+  auc <- as.numeric(auc2@y.values)
+  print(auc)
+}
+
+ 
+###=======================================================================================###
+###=======================================================================================###
+##Bagging, RanForest (y Boosting?)##
+#Modelos computacionalmente costosos, vamos a utilizar PCA
+ranfor.notpca <- function(umbral, prediccion){
+  a <- data[,which(naprct<=umbral)]
+  a <- a[complete.cases(a),]
+  b <- a[,which(colnames(data)==as.character(prediccion))]
+  a <- a[,c(-1,-2,-3)]
+  a <- data.frame(b, a)
+  a$b <- as.factor(a$b)
+  
+  id.train = sample(length(a[,1]), 10000)
+  pred.test = matrix(0, nrow=length(a$b[-id.train]), ncol=1)
+  umbrales = c(0, 0.05, 0.15)
+  mbench = round(sqrt(length(a)))
+  proxy = seq(mbench-2, mbench+2)
+  pred.test2 = matrix(NA, ncol = length(proxy), nrow = length(a$b[-id.train]))
+  auc = matrix(NA, ncol = 1, nrow = length(proxy))
+  for (i in 1:length(proxy)) {
+    ranfor <- randomForest(b~.,
+                           data=a[id.train,],
+                           mtry = proxy[i] , #(si m = cantidad features entonces estamos haciendo Bagging)
+                           ntree=100,     # B
+                           sample = 5000, # tamaño de cada re-muestra bootstrap.
+                           maxnodes = 150,  # cantidad máxima de nodos terminales en c/ árbol.
+                           nodesize = 5, # cantidad mínima de datos en nodo terminal.
+                           importance=T)   # Computar importancia de c/ covariable.
+    
+    pred.test.proxy = predict(ranfor, newdata = a[-id.train, -1], type="prob")
+    pred.test2[,i] = pred.test.proxy[,2]
+    
+    pred2 = prediction(pred.test2[,i], a[-id.train,1])
+    auc2 <- performance(pred2, "auc")
+    auc[i] <- sprintf("%.5f", as.numeric(auc2@y.values))
+    print(i)
+  }
+  
+  pred.test[which(pred.test2[,which.max(auc)]>=0.2)] = 1
+  pred2 = prediction(pred.test2[,which.max(auc)], a[-id.train,1])
+  aucbest = auc[which.max(auc)]
+  
+  rocplot <- function(pred2){
+    par(pty="s")                             
+    plot(performance(pred2,"tpr","fpr"), main="Curva ROC: Random Forest - NonPCA", col="blue", yaxs="i", xaxs="i", lwd=5) # Curva ROC datos test.
+    abline(0,1, lwd=2.5)
+  }
+  rocplot(pred2)
+  print(paste0("Random Forest auc:", aucbest)) 
+  print(table(pred.test, a$b[-id.train]))
+  
+ }
+
+#load("D:/UTDT/8vo Semestre/Machine Learning/Proyecto final/RanForNoPCA.RData")
+
+bagging <- function(umbral, prediccion){
+  a <- data[,which(naprct<=umbral)]
+  a <- a[complete.cases(a),]
+  b <- a[,which(colnames(data)==as.character(prediccion))]
+  a <- as.data.frame(cbind(b, pca05$x))
+  a$b <- as.factor(a$b)
+  
+  id.train = sample(length(a[,1]), round(length(a[,1])/2))
+  pred.test = matrix(0, nrow=length(a$b[-id.train]), ncol=1)
+  umbrales = c(0, 0.05, 0.15)
+  pred.test3 = matrix(NA, ncol = 2, nrow = length(a$b[-id.train]))
+  auc = c()
+  for (i in 1:2) {
+    ranfor <- randomForest(b~.,
+                           data=a[id.train,1:(pcaumbrales[which(umbrales==umbral), i+1]+1)],
+                           mtry = pcaumbrales[which(umbrales==umbral), i+1] , #(si m = cantidad features entonces estamos haciendo Bagging)
+                           ntree=100,     # B
+                           sample = 10000, # tamaño de cada re-muestra bootstrap.
+                           maxnodes = 150,  # cantidad máxima de nodos terminales en c/ árbol.
+                           nodesize = 5, # cantidad mínima de datos en nodo terminal.
+                           importance=T)   # Computar importancia de c/ covariable.
+    
+    pred.test2 = predict(ranfor, newdata = a[-id.train, -1], type="prob")
+    pred.test3[,i] = pred.test2[,2]
+    
+    pred2 = prediction(pred.test2[,2], a[-id.train,1])
+    auc2 <- performance(pred2, "auc")
+    auc[i] <- sprintf("%.5f", as.numeric(auc2@y.values))
+    print(i)
+  }
+  
+  
+  pred2 = prediction(pred.test3[,which.max(auc)], a[-id.train,1])
+  rocplot <- function(pred2){
+    par(pty="s")                             
+    plot(performance(pred2,"tpr","fpr"), main="Curva ROC: Bagging", col="blue", yaxs="i", xaxs="i", lwd=10) # Curva ROC datos test.
+    abline(0,1, lwd=2.5)
+  }
+  rocplot(pred2)
+  pred.test[which(pred.test3[,which.max(auc)]>=0.5)] = 1
+  print(paste0("Bagging auc:", auc))
+  print(table(pred.test, a$b[-id.train]))
+}
+#load("D:/UTDT/8vo Semestre/Machine Learning/Proyecto final/Bagging.RData")
+
+
+ranforest <- function(umbral, prediccion){
+  a <- data[,which(naprct<=umbral)]
+  a <- a[complete.cases(a),]
+  b <- a[,which(colnames(data)==as.character(prediccion))]
+  a <- as.data.frame(cbind(b, pca05$x))
+  a$b <- as.factor(a$b)
+  
+  id.train = sample(length(a[,1]), round(length(a[,1])/2))
+  pred.test = matrix(0, nrow=length(a$b[-id.train]), ncol=1)
+  umbrales = c(0, 0.05, 0.15)
+  proxy = c(round(sqrt(length(a))), pcaumbrales$varpct70[which(umbrales==umbral)], pcaumbrales$varpct90[which(umbrales==umbral)])
+  auc <- c()
+  pred.test3 = matrix(NA, ncol = length(proxy), nrow = length(id.train))
+  for (i in 1:length(proxy)) {
+    ranfor <- randomForest(b~.,
+                           data=a[id.train,],
+                           mtry = proxy[i], 
+                           ntree=100,     # B
+                           sample = 10000, # tamaño de cada re-muestra bootstrap.
+                           maxnodes = 150,  # cantidad máxima de nodos terminales en c/ árbol.
+                           nodesize = 5, # cantidad mínima de datos en nodo terminal.
+                           importance=T)   # Computar importancia de c/ covariable.
+    
+    pred.test2 = predict(ranfor, newdata = a[-id.train, -1], type="prob")
+    pred.test3[,i] = pred.test2[,2]
+    
+    pred2 = prediction(pred.test2[,2], a[-id.train,1])
+    auc2 <- performance(pred2, "auc")
+    auc[i] <- as.numeric(auc2@y.values)
+    print(paste0(i,"/3"))
+  }
+  
+  
+  pred.test[which(pred.test3[,which.max(auc)]>=0.50)] = 1
+  table(pred.test, a$b[-id.train])
+  pred2 = prediction(pred.test3[,which.max(auc)], a[-id.train,1])
+  
+  rocplot <- function(pred2){
+    par(pty="s")                             
+    plot(performance(pred2,"tpr","fpr"), main="Curva ROC: Random Forest", col="blue", yaxs="i", xaxs="i", lwd=10) # Curva ROC datos test.
+    abline(0,1, lwd=2.5)
+  }
+  rocplot(pred2)
+  print(paste0("Random Forest auc:", sprintf("%.5f", max(auc))))
+  print(table(pred.test, a$b[-id.train]))
+}
+ranforest(0.05, "druglyr")
+
+#load("D:/UTDT/8vo Semestre/Machine Learning/Proyecto final/Ranforest.RData")
+
+ranforest.reducido <- function(umbral, prediccion){
+  a <- data[,which(naprct<=umbral)]
+  a <- a[complete.cases(a),]
+  b <- a[,which(colnames(data)==as.character(prediccion))]
+  a <- as.data.frame(cbind(b, pca05$x))
+  a$b <- as.factor(a$b)
+  
+  id.train = sample(length(a[,1]), round(length(a[,1])/2))
+  pred.test = matrix(0, nrow=length(a$b[-id.train]), ncol=1)
+  umbrales = c(0, 0.05, 0.15)
+  proxy = c(round(sqrt(pcaumbrales$varpct90[which(umbrales==umbral)])), pcaumbrales$varpct70[which(umbrales==umbral)])
+  pred.test2 = matrix(NA, ncol = length(proxy), nrow = length(a$b[-id.train]))
+  auc = matrix(NA, ncol = 1, nrow = length(proxy))
+  for (i in 1:length(proxy)) {
+    ranfor <- randomForest(b~.,
+                           data=a[id.train, 1:(1+pcaumbrales$varpct90[which(umbrales==umbral)])],
+                           mtry = proxy[i] , #(si m = cantidad features entonces estamos haciendo Bagging)
+                           ntree=100,     # B
+                           sample = 10000, # tamaño de cada re-muestra bootstrap.
+                           maxnodes = 150,  # cantidad máxima de nodos terminales en c/ árbol.
+                           nodesize = 5, # cantidad mínima de datos en nodo terminal.
+                           importance=T)   # Computar importancia de c/ covariable.
+    
+    pred.test.proxy = predict(ranfor, newdata = a[-id.train, -1], type="prob")
+    pred.test2[,i] = pred.test.proxy[,2]
+    
+    pred2 = prediction(pred.test2[,i], a[-id.train,1])
+    auc2 <- performance(pred2, "auc")
+    auc[i] <- sprintf("%.5f", as.numeric(auc2@y.values))
+    print(i)
+  }
+  
+  pred.test[which(pred.test2[,which.max(auc)]>=0.2)] = 1
+  pred2 = prediction(pred.test2[,which.max(auc)], a[-id.train,1])
+  aucbest = auc[which.max(auc)]
+  
+  rocplot <- function(pred2){
+    par(pty="s")                             
+    plot(performance(pred2,"tpr","fpr"), main="Curva ROC: Random Forest", col="blue", yaxs="i", xaxs="i", lwd=5) # Curva ROC datos test.
+    abline(0,1, lwd=2.5)
+  }
+  rocplot(pred2)
+  print(paste0("Random Forest auc:", sprintf("%.5f", aucbest))) 
+  print(table(pred.test, a$b[-id.train]))
+}
+#load("D:/UTDT/8vo Semestre/Machine Learning/Proyecto final/RanforestReducido.RData")
+
+
+#NO HACER VARIABLE RESULTADO FACTOR QUE TERMINA EN FATAL ERROR
+boosting <- function(umbral, prediccion){
+a <- data[,which(naprct<=umbral)]
+a <- a[complete.cases(a),]
+b <- a[,which(colnames(data)==as.character(prediccion))]
+a <- as.data.frame(cbind(b, pca05$x))
+
+id.train = sample(length(a[,1]), round(length(a[,1])/2))
+umbrales = c(0, 0.05, 0.15)
+pred.test = matrix(0, nrow=length(a$b[-id.train]), ncol=1)
+
+boosting = gbm(b~.,
+              data=a[id.train, 1:pcaumbrales$varpct70[which(umbrales==umbral)]], 
+              distribution="bernoulli",  # Regresión (Y continua). En clasificación: distribution="bernulli"
+              n.trees=500,             # Tamaño de la secuencia (M en slide 44)
+              shrinkage=0.1,             # Parámetro lambda en slide 44.
+              bag.fraction=0.5,         # Parámetro 'eta' en slide 44.
+              train.fraction=0.8,       # Parámetro 'delta' en slide 44.
+              interaction.depth= 5,      # Parámetro de complejidad de cada modelo en la secuencia (utilizar modelos simples)
+              cv.folds=3,               # Si cv.folds > 0 estima también por VC (train frac) el error del modelo (puede ponerse bastante lento el entrenamiento)  
+              keep.data=T,
+              verbose=T)
+
+pred.test2 = predict(boosting, newdata = a[-id.train, -1], type="response")
+
+pred2 = prediction(pred.test2, a[-id.train,1])
+auc2 <- performance(pred2, "auc")
+auc <- sprintf("%.5f", as.numeric(auc2@y.values))
+
+pred.test[which(pred.test2 >= 0.5)] = 1
+table(pred.test, a$b[-id.train])
+
+rocplot <- function(pred2){
+  par(pty="s")                             
+  plot(performance(pred2,"tpr","fpr"), main="Curva ROC: Boosting", col="blue", yaxs="i", xaxs="i", lwd=8) # Curva ROC datos test.
+  abline(0,1, lwd=2.5)
+}
+rocplot(pred2)
+print(paste0("Boosting auc:", auc))
+print(table(pred.test, a$b[-id.train]))
+}
+#load("D:/UTDT/8vo Semestre/Machine Learning/Proyecto final/Boosting.RData")
+
+
+###=======================================================================================###
+###=======================================================================================###
+##Support Vector Machine(SVM)##
+#Puedo entrenar con menos variables, cuidado no usar demasiadas obs para el modelo
+
+svm.pca <- function(umbral, prediccion){
+a <- data[,which(naprct<=umbral)]
+a <- a[complete.cases(a),]
+b <- a[,which(colnames(data)==as.character(prediccion))]
+a <- as.data.frame(cbind(b, pca05$x))
+
+id.train <- sample(length(a[,1]), 3000) #round(length(a[,1])/2)
+proxy <- expand.grid(C = c(0.1, 1, 10), gamma = c(0.1, 1, 10))
+pred.train <- matrix(NA, nrow = length(id.train), ncol = length(proxy$C))
+
+for (i in 1:length(proxy$C)) {
+  svm.model <-  svm(b ~ ., 
+                    data = a,
+                    subset = id.train,
+                    type = 'C-classification', # Si "y" es factor "C-class" método por defecto.
+                    kernel = "linear",         # Support Vector Classifier. #Radial tmb funca se supone
+                    cost = proxy[i,1],               # Parámetro C (ver efectos en slide 19)
+                    gamma = proxy[i,2],
+                    cross = 5,                # Estima el error por VC
+                    scale = TRUE,              # Recomendable escalar los features para acelerar el fitting.
+                    threshold = 0.005)
+  pred.train[,i] = predict(svm.model)
+  print(paste0(i,"/9"))
+}
+pred.train = pred.train-1 #Factores son 1 y 2. Aprovechamos vectorizacion de R para arreglar de manera eficiente 
+
+auc <- c()
+for (i in 1:length(proxy[,1])) {
+  pred2 <- prediction(as.matrix(pred.train[,i]), a[id.train,1])
+  auc2 <- performance(pred2, "auc")
+  auc[i] <- as.numeric(auc2@y.values)
+}
+
+#Predicen perfecto in-sample. Agarramos la más computacionalmente barata, which.max() agarra el primer maximo
+bestcomb = proxy[which.max(auc),]
+
+svm.model <-  svm(b ~ ., 
+                  data = a,
+                  subset = id.train,
+                  type = 'C-classification', # Si "y" es factor "C-class" método por defecto.
+                  kernel = "linear",         # Support Vector Classifier. #Radial tmb funca se supone
+                  cost = bestcomb[,1],               # Parámetro C (ver efectos en slide 19)
+                  gamma = bestcomb[,2],
+                  cross = 5,                # Estima el error por VC
+                  scale = TRUE,              # Recomendable escalar los features para acelerar el fitting.
+                  threshold = 0.005)
+
+pred.test = predict(svm.model, newdata = a[-id.train,], type="prob")
+table(pred.test, a$b[-id.train])
+
+pred2 <- prediction(as.matrix(as.numeric(pred.test)), a[-id.train,1])
+auc2 <- performance(pred2, "auc")
+auctest <- as.numeric(auc2@y.values)
+
+rocplot <- function(pred2){
+  par(pty="s")                             
+  plot(performance(pred2,"tpr","fpr"), main="Curva ROC: SVM", col="blue", yaxs="i", xaxs="i", lwd=10) # Curva ROC datos test.
+  abline(0,1, lwd=2.5)
+}
+rocplot(pred2)
+print(paste0("SVM auc:", sprintf("%.5f", auctest)))
+print(table(pred.test, a$b[-id.train]))
+}
+
+#load("D:/UTDT/8vo Semestre/Machine Learning/Proyecto final/SVM.RData")
+
+svm.nonpca <- function(umbral, prediccion){
+a <- data[,which(naprct<=umbral)]
+a <- a[complete.cases(a),]
+b <- a[,which(colnames(data)==as.character(prediccion))]
+a <- a[,c(-1,-2,-3)]
+a <- data.frame(b, a)
+
+
+id.train <- sample(length(a[,1]), 3000) #round(length(a[,1])/2)
+proxy <- expand.grid(C = c(0.1, 1, 10), gamma = c(0.1, 1, 10))
+pred.train <- matrix(NA, nrow = length(id.train), ncol = length(proxy$C))
+
+for (i in 1:length(proxy$C)) {
+  svm.model <-  svm(b ~ ., 
+                    data = a,
+                    subset = id.train,
+                    type = 'C-classification', # Si "y" es factor "C-class" método por defecto.
+                    kernel = "linear",         # Support Vector Classifier. #Radial tmb funca se supone
+                    cost = proxy[i,1],               # Parámetro C (ver efectos en slide 19)
+                    gamma = proxy[i,2],
+                    cross = 5,                # Estima el error por VC
+                    scale = TRUE,              # Recomendable escalar los features para acelerar el fitting.
+                    threshold = 0.005)
+  pred.train[,i] = predict(svm.model)
+  print(paste0(i,"/9"))
+}
+pred.train = pred.train-1 #Factores son 1 y 2. Aprovechamos vectorizacion de R para arreglar de manera eficiente 
+
+auc <- c()
+for (i in 1:length(proxy[,1])) {
+  pred2 <- prediction(as.matrix(pred.train[,i]), a[id.train,1])
+  auc2 <- performance(pred2, "auc")
+  auc[i] <- as.numeric(auc2@y.values)
+}
+
+#No es sensible a cambios en gamma, es sensible a cambios en C, cuanto más alto mejor predice
+bestcomb = proxy[which.max(auc),]
+
+svm.model <-  svm(b ~ ., 
+                  data = a,
+                  subset = id.train,
+                  type = 'C-classification', # Si "y" es factor "C-class" método por defecto.
+                  kernel = "linear",         # Support Vector Classifier. #Radial tmb funca se supone
+                  cost = bestcomb[,1],               # Parámetro C (ver efectos en slide 19)
+                  gamma = bestcomb[,2],
+                  cross = 5,                # Estima el error por VC
+                  scale = TRUE,              # Recomendable escalar los features para acelerar el fitting.
+                  threshold = 0.005)
+
+pred.test = predict(svm.model, newdata = a[-id.train,], type="prob")
+table(pred.test, a$b[-id.train])
+
+pred2 <- prediction(as.matrix(as.numeric(pred.test)), a[-id.train,1])
+auc2 <- performance(pred2, "auc")
+auctest <- as.numeric(auc2@y.values)
+
+rocplot <- function(pred2){
+  par(pty="s")                             
+  plot(performance(pred2,"tpr","fpr"), main="Curva ROC: SVM non-PCA", col="blue", yaxs="i", xaxs="i", lwd=10) # Curva ROC datos test.
+  abline(0,1, lwd=2.5)
+}
+rocplot(pred2)
+print(paste0("SVM non-PCA auc:", sprintf("%.5f", auctest)))
+print(table(pred.test, a$b[-id.train])) 
+}
+
+#load("D:/UTDT/8vo Semestre/Machine Learning/Proyecto final/SVMnonPCA.RData")
+
