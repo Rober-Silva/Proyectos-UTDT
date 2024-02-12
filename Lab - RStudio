@@ -1,0 +1,924 @@
+##Ejercicio 1##
+rm(list=ls())
+## Inciso 1 ############################################################
+
+# Genero una función que primero genere un vector vacío. Luego, voy llenando
+# el vector con las medias de n observaciones de una normal estándar. Lo hago
+# mil veces; es decir, el vector tendrá mil elementos. 
+vector_de_medias <- function(n) {
+  vector_mean <- c()
+  for (i in 1:1000) {
+    vector_mean[i] <- mean(rnorm(n))
+  }
+  return(vector_mean)
+}
+
+# Para distintos valores de n tomo la media y el desvío del vector realizado. 
+# Luego, genero un data frame donde guardo las mil medias aritméticas 
+# tomadas en cada iteración. Esto me servirá para luego hacer un gráfico. 
+n = 30
+mean_30 <- mean(vector_de_medias(n))
+sd_30 <- sd(vector_de_medias(n))
+observaciones <- data.frame(mean_30_obs = vector_de_medias(n))
+
+n = 100
+mean_100 <- mean(vector_de_medias(n))
+sd_100 <- sd(vector_de_medias(n))
+observaciones$mean_100_obs <- vector_de_medias(n)
+
+n = 500
+mean_500 <- mean(vector_de_medias(n))
+sd_500 <- sd(vector_de_medias(n))
+observaciones$mean_500_obs <- vector_de_medias(n)
+
+n = 1000
+mean_1000 <- mean(vector_de_medias(n))
+sd_1000 <- sd(vector_de_medias(n))
+observaciones$mean_1000_obs <- vector_de_medias(n)
+
+
+# Creo una tabla que contenga 3 columnas. La primera que contenga los distintos
+# n observaciones pedidas; la segunda con las medias del vector generado para 
+# cada n; y la tercera con los desvíos de las medias del vector generado para 
+# cada n.
+Tabla <- data.frame(n = c(30, 100, 500, 1000),
+                    mean = c(mean_30, mean_100, mean_500, mean_1000), 
+                    sd = c(sd_30, sd_100, sd_500, sd_1000))
+
+
+## Inciso 2 ############################################################3
+
+# Bajamos las librerías necesarias.
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+
+# A partir del data frame "observaciones", generamos el gráfico con las 
+# cuatro distintas estimaciones de densidad de Kernel para cada valor de n.
+observaciones %>% 
+  pivot_longer(cols = 1:4,names_to="means",values_to="iteración") %>% 
+  ggplot(aes(iteración)) + 
+  geom_density(aes(color=means)) + 
+  labs(title = "Kernel Density Estimate of Means",
+       x = "x mean values",
+       y = "Density") 
+
+
+## Inciso 3 ########################################################
+vector_de_medias_v2 <- function(n) {
+  vector_mean <- c()
+  for (i in 1:1000) {
+    vector_mean[i] <- mean(rexp(n, 1))
+  }
+  return(vector_mean)
+}
+
+n = 30
+mean_30 <- mean(vector_de_medias_v2(n))
+sd_30 <- sd(vector_de_medias(n))
+observaciones_v2 <- data.frame(mean_30_obs = vector_de_medias(n))
+
+n = 100
+mean_100 <- mean(vector_de_medias_v2(n))
+sd_100 <- sd(vector_de_medias(n))
+observaciones_v2$mean_100_obs <- vector_de_medias(n)
+
+n = 500
+mean_500 <- mean(vector_de_medias_v2(n))
+sd_500 <- sd(vector_de_medias(n))
+observaciones_v2$mean_500_obs <- vector_de_medias(n)
+
+n = 1000
+mean_1000 <- mean(vector_de_medias_v2(n))
+sd_1000 <- sd(vector_de_medias(n))
+observaciones_v2$mean_1000_obs <- vector_de_medias(n)
+
+Tabla_v2 <- data.frame(n = c(30, 100, 500, 1000),
+                    mean = c(mean_30, mean_100, mean_500, mean_1000), 
+                    sd = c(sd_30, sd_100, sd_500, sd_1000))
+
+library(ggplot2)
+observaciones_v2 %>% 
+  pivot_longer(cols = 1:4,names_to="means",values_to="iteración") %>% 
+  ggplot(aes(iteración)) + 
+  geom_density(aes(color=means)) + 
+  labs(title = "Kernel Density Estimate of Means",
+       x = "x mean values",
+       y = "Density") 
+
+
+
+##--------------------------------------------------------------------------------------------------------------------##
+##--------------------------------------------------------------------------------------------------------------------##
+##Ejercicio 2##
+rm(list=ls())
+
+# Creo una función que, eligiendo n, me estime el modelo OLS.
+OLS <- function(n, u){
+  b1_hat <- c()
+  b0 = 3
+  b1 = 1
+  for (i in 1:1000){
+    x <- rnorm(n, mean = 2, sd = 1)
+    y <- b0 + b1 * x + u # genero las y.
+    bhat <- lm(formula = y ~ x) # hago la regresión para estimar los betas.
+    b1_hat[i] <- bhat$coefficients[2]
+  }
+  return(b1_hat)
+}
+
+# Genero una función que cree los Intervalos de Confianza, ingresándole un
+# b1_hat y un mu. Me devuelve un vector de ceros y unos, poniendo un uno 
+# cuando el elemento i-ésimo del vector cae dentro del intervalo de confianza
+# y un uno cuando cae por fuera.
+IC <- function(b1_hat, mu){
+  vector <- c()
+  for (i in 1:1000){
+    coef_inferior <- -qt(0.975, df = n-1,)*sd(b1_hat)/sqrt(n)
+    coef_superior <- qt(0.975, df = n-1,)*sd(b1_hat)/sqrt(n)
+    
+    if (b1_hat[i]-mu >= (coef_inferior) & b1_hat[i]-mu <= (coef_superior)){
+      vector[i] <- 1
+    }
+    else{
+      vector[i] <- 0
+    }
+  }
+  return(vector)
+}
+
+n_values <- c(10, 20, 100, 200, 500, 1000)
+mean_b1_hat <- c()
+prob_tipo1 <- c()
+potencia <- c()
+
+# Este loop me devuelve el promedio de los b1_hat, la probabilidad de cometer
+# error de tipo 1 y la potencia, iterando para cada valor de n pedido.
+for (i in 1:length(n_values)){
+  n <- n_values[i]
+  u <- rnorm(n, mean = 0, sd = sqrt(12))
+  b1_hat <- OLS(n, u)
+  vector_1 <- IC(b1_hat, mu = 1)
+  vector_2 <- IC(b1_hat, mu = 0.5)
+  
+  mean_b1_hat[i] <- mean(b1_hat) #medias de b1_hat
+  prob_tipo1[i] <- mean(vector_1) #probabilidad de error de tipo 1.
+  potencia[i] <- 1 - mean(vector_2)  #potencia
+}
+
+# Finalmente, agrego los vectores obtenidos a la tabla creada inicialmente
+tabla <- data.frame(c(10, 20, 100, 200, 500, 1000), mean_b1_hat, 
+                    prob_tipo1, potencia) 
+colnames(tabla) <- c("n", "media de b1 hat", "Prob Error tipo 1", "Potencia")
+
+
+
+
+###### Inciso 2 - Error heterocedástico #################################
+
+# Vuelvo a redefinir una función OLS que no incluya en su input el término de 
+# error porque si así lo hago no encuentra quién es x. 
+OLS_v2 <- function(n){
+  b1_hat <- c()
+  b0 = 3
+  b1 = 1
+  for (i in 1:1000){
+    x <- rnorm(n, mean = 2, sd = 1)
+    u <- rnorm(n, mean = 0, sd = 4*exp(x) / exp(4.5))
+    y <- b0 + b1 * x + u # genero las y.
+    bhat <- lm(formula = y ~ x) # hago la regresión para estimar los betas.
+    b1_hat[i] <- bhat$coefficients[2]
+  }
+  return(b1_hat)
+}
+
+n_values <- c(10, 20, 100, 200, 500, 1000)
+mean_b1_hat <- c()
+prob_tipo1 <- c()
+potencia <- c()
+
+for (i in 1:length(n_values)){
+  n <- n_values[i]
+  b1_hat <- OLS_v2(n)
+  vector_1 <- IC(b1_hat, mu = 1)
+  vector_2 <- IC(b1_hat, mu = 0.5)
+  
+  mean_b1_hat[i] <- mean(b1_hat) #medias de b1_hat
+  prob_tipo1[i] <- mean(vector_1) #probabilidad de error de tipo 1.
+  potencia[i] <- 1 - mean(vector_2)  #potencia
+}
+
+tabla_2 <- data.frame(c(10, 20, 100, 200, 500, 1000), mean_b1_hat, 
+                    prob_tipo1, potencia) 
+colnames(tabla_2) <- c("n", "media de b1 hat", "Prob Error tipo 1", "Potencia")
+
+
+
+
+##### Inciso 3 ######################################################
+
+## El Error ahora es u <- sqrt(2352/5)*(rbeta(n, 2, 5)):
+
+n_values <- c(10, 20, 100, 200, 500, 1000)
+mean_b1_hat <- c()
+prob_tipo1 <- c()
+potencia <- c()
+
+# Este loop me devuelve el promedio de los b1_hat, la probabilidad de cometer
+# error de tipo 1 y la potencia, iterando para cada valor de n pedido.
+for (i in 1:length(n_values)){
+  n <- n_values[i]
+  u <- sqrt(2352/5)*(rbeta(n, 2, 5))
+  b1_hat <- OLS(n, u)
+  vector_1 <- IC(b1_hat, mu = 1)
+  vector_2 <- IC(b1_hat, mu = 0.5)
+  
+  mean_b1_hat[i] <- mean(b1_hat) #medias de b1_hat
+  prob_tipo1[i] <- mean(vector_1) #probabilidad de error de tipo 1.
+  potencia[i] <- 1 - mean(vector_2)  #potencia
+}
+
+# Finalmente, agrego los vectores obtenidos a la tabla creada inicialmente
+tabla_3 <- data.frame(c(10, 20, 100, 200, 500, 1000), mean_b1_hat, 
+                    prob_tipo1, potencia) 
+colnames(tabla_3) <- c("n", "media de b1 hat", "Prob Error tipo 1", "Potencia")
+
+## El Error ahora es u <- rt(n, 2, 1818):
+
+n_values <- c(10, 20, 100, 200, 500, 1000)
+mean_b1_hat <- c()
+prob_tipo1 <- c()
+potencia <- c()
+
+# Este loop me devuelve el promedio de los b1_hat, la probabilidad de cometer
+# error de tipo 1 y la potencia, iterando para cada valor de n pedido.
+for (i in 1:length(n_values)){
+  n <- n_values[i]
+  u <- rt(n, 1818)
+  b1_hat <- OLS(n, u)
+  vector_1 <- IC(b1_hat, mu = 1)
+  vector_2 <- IC(b1_hat, mu = 0.5)
+  
+  mean_b1_hat[i] <- mean(b1_hat) #medias de b1_hat
+  prob_tipo1[i] <- mean(vector_1) #probabilidad de error de tipo 1.
+  potencia[i] <- 1 - mean(vector_2)  #potencia
+}
+
+# Finalmente, agrego los vectores obtenidos a la tabla creada inicialmente
+tabla_4 <- data.frame(c(10, 20, 100, 200, 500, 1000), mean_b1_hat, 
+                      prob_tipo1, potencia) 
+colnames(tabla_4) <- c("n", "media de b1 hat", "Prob Error tipo 1", "Potencia")
+
+
+
+## El Error ahora es u <- sqrt(75)*(rbern(n, 0.8)-0.8):
+
+library(Rlab) #para la distribución bernoulli.
+
+n_values <- c(10, 20, 100, 200, 500, 1000)
+mean_b1_hat <- c()
+prob_tipo1 <- c()
+potencia <- c()
+
+# Este loop me devuelve el promedio de los b1_hat, la probabilidad de cometer
+# error de tipo 1 y la potencia, iterando para cada valor de n pedido.
+for (i in 1:length(n_values)){
+  n <- n_values[i]
+  u <- sqrt(75)*(rbern(n, 0.8)-0.8)
+  b1_hat <- OLS(n, u)
+  vector_1 <- IC(b1_hat, mu = 1)
+  vector_2 <- IC(b1_hat, mu = 0.5)
+  
+  mean_b1_hat[i] <- mean(b1_hat) #medias de b1_hat
+  prob_tipo1[i] <- mean(vector_1) #probabilidad de error de tipo 1.
+  potencia[i] <- 1 - mean(vector_2)  #potencia
+}
+
+# Finalmente, agrego los vectores obtenidos a la tabla creada inicialmente
+tabla_5 <- data.frame(c(10, 20, 100, 200, 500, 1000), mean_b1_hat, 
+                      prob_tipo1, potencia) 
+colnames(tabla_5) <- c("n", "media de b1 hat", "Prob Error tipo 1", "Potencia")
+
+
+
+## El Error ahora es u <- rnorm(n, mean = 0, sd = sqrt(12)) pero el primer
+# elemento es u_1 = 500:
+
+n_values <- c(10, 20, 100, 200, 500, 1000)
+mean_b1_hat <- c()
+prob_tipo1 <- c()
+potencia <- c()
+
+# Este loop me devuelve el promedio de los b1_hat, la probabilidad de cometer
+# error de tipo 1 y la potencia, iterando para cada valor de n pedido.
+for (i in 1:length(n_values)){
+  n <- n_values[i]
+  u <- rnorm(n, mean = 0, sd = sqrt(12))
+  u[1] = 500
+  b1_hat <- OLS(n, u)
+  vector_1 <- IC(b1_hat, mu = 1)
+  vector_2 <- IC(b1_hat, mu = 0.5)
+  
+  mean_b1_hat[i] <- mean(b1_hat) #medias de b1_hat
+  prob_tipo1[i] <- mean(vector_1) #probabilidad de error de tipo 1.
+  potencia[i] <- 1 - mean(vector_2)  #potencia
+}
+
+# Finalmente, agrego los vectores obtenidos a la tabla creada inicialmente
+tabla_6 <- data.frame(c(10, 20, 100, 200, 500, 1000), mean_b1_hat, 
+                      prob_tipo1, potencia) 
+colnames(tabla_6) <- c("n", "media de b1 hat", "Prob Error tipo 1", "Potencia")
+
+
+##--------------------------------------------------------------------------------------------------------------------##
+##--------------------------------------------------------------------------------------------------------------------##
+##Ejercicio 3##
+rm(list=ls())
+library(tidyverse)
+library(fs)
+library(lubridate)
+library(scales)
+library(sf)
+
+ file_paths <- fs::dir_ls("D:/R/Lab/DataEj3") #todos los paths
+
+ date <- data.frame(seq.Date(from = ymd("1900-1-1"),to = ymd("1970-12-31"), "days")) #Notar que 1900 no es bisiesto xq es multiplo de 100 no divisible por 400.
+ colnames(date) <- "date" #dataframe con todas las fechas entre 1900 y 1970 para el left join
+ 
+ 
+##INCISO [I]
+ 
+ ID <- c() #Para que se quede los valores de ID
+ resultados <- date #funcion base para el left join
+ 
+ j_iter <- 750
+ progbar <- winProgressBar(title = "R está agarrando la pala", # Window title
+                           label = "Percentage completed", # Window label
+                           min = 0,      # Minimum value of the bar
+                           max = j_iter, # Maximum value of the bar
+                           initial = 0,  # Initial value of the bar
+                           width = 300L) # Width of the window
+ 
+ for (j in 2:j_iter){
+   df_ID <- read_csv(file_paths[[j]]) %>%
+     select("ID","year", "month", starts_with("Val"))
+   colnames(df_ID) <- c("ID","year", "month", 1:31) #Filtro los datos que me interesan del archivo.csv
+   ID[j-1] <- df_ID$ID[1] #Vector que junta un unico valor de la columna ID
+   df <- df_ID %>% 
+     pivot_longer(cols = 4:34, names_to = "day", values_to = "PRCP") #Paso a long
+   df <- df %>% 
+     mutate(date =  make_date(year = df$year, month = df$month, day = df$day)) %>% #Como hago mutate con la columna "day" necesito que este incluida en la referencia 
+     select("date", "PRCP")
+     resultados <- left_join(x=resultados,y=df, by="date") #Voy juntando los datos para todos los dias entre 1900-70, si no tiene algun valor deja un NA
+
+   
+   pctg <- paste(round(j/j_iter *100, 0), "% completed")
+   setWinProgressBar(progbar, j, label = pctg) 
+ }
+ close(progbar) # Close the connection
+ 
+ metadata <- read_csv(file_paths[[1]]) #Leo el primer excel
+ ID_NAME <- data.frame(metadata$ID,metadata$NAME) #Me quedo las columnas de ID y NAME, se corresponden por fila
+ colnames(ID_NAME) <- c("ID","NAME") #Nombres para left join
+ rm(metadata)#La eliminamos porque ya filtramos los datos deseados y usa mucha RAM
+ gc()
+ 
+ ID <- data.frame(ID) #Para pasar de vector de caracteres a dataframe y poder usar colname
+ colnames(ID) <- "ID" #Para el left join
+ ID_NAME <- left_join(x = ID, y=ID_NAME, by="ID") #me quedo con solo los NAME correspondiente a los 750 ID que saque del loop
+ rm(ID)
+ 
+ colnames(resultados) <- c("date", ID_NAME$NAME) #Las columnas tienen el mismo orden con el que genere el vector ID
+ #Entonces puedo darle los NAMES del vector ID_NAME que tienen las 749 estaciones con las que trabajamos.
+
+
+##INCISO [II]
+ 
+#Podemos omitir la parte de ID ya que es el mismo vector
+ resultados_xxQ <- date #funcion base para el left join
+ 
+ j_iter <- 750
+ progbar <- winProgressBar(title = "Here we go again", # Window title
+                           label = "Percentage completed", # Window label
+                           min = 0,      # Minimum value of the bar
+                           max = j_iter, # Maximum value of the bar
+                           initial = 0,  # Initial value of the bar
+                           width = 300L) # Width of the window
+ 
+ for (j in 2:j_iter){
+   df <- read_csv(file_paths[[j]]) %>%
+     select("year", "month", starts_with("xxQ"))
+   colnames(df) <- c("year", "month", 1:31) #Filtro los datos que me interesan del archivo.csv
+   df <- df %>% 
+     pivot_longer(cols = 3:33, names_to = "day", values_to = "flag") #Paso a long
+   df <- df %>% 
+     mutate(date =  make_date(year = df$year, month = df$month, day = df$day)) %>% #Como hago mutate con la columna "day" necesito que este incluida en la referencia 
+     select("date", "flag")
+   resultados_xxQ <- left_join(x=resultados_xxQ,y=df, by="date") #Voy juntando los datos para todos los dias entre 1900-70, si no tiene algun valor deja un NA
+   
+   pctg <- paste(round(j/j_iter *100, 0), "% completed")
+   setWinProgressBar(progbar, j, label = pctg) 
+ }
+ close(progbar) # Close the connection
+ 
+ colnames(resultados_xxQ) <- c("date", ID_NAME$NAME) #Las columnas tienen el mismo orden con el que genere el vector ID
+ #Entonces puedo darle los NAMES del vector ID_NAME que tienen las 749 estaciones con las que trabajamos.
+ 
+ 
+ ##INCISO [III]
+ 
+ colnames(resultados) <- c("date", ID_NAME$ID)
+ colnames(resultados_xxQ) <- c("date", ID_NAME$ID) #Cambiamos los nombres de las columnas a ID porque algunas estaciones tienen nombres repetidos
+ #Esto genera problemas con como lee las columnas cuando pasamos a long. Para evitar esto pasamos a ID y despues les volvemos a poner el nombre de 
+ #su estacion correspondiente
+ 
+prcp_long <- pivot_longer(resultados,cols = 2:750, names_to = "station", values_to = "prcp") 
+
+xxQ_long <- pivot_longer(resultados_xxQ,cols = 2:750, names_to = "station", values_to = "flags")
+#Quiero concatenar las fechas con el date, y desps hacer el join
+
+date_station <- data.frame(prcp_long, xxQ_long$flags)
+colnames(date_station) <- c("date", "station", "prcp", "flags")
+rm(prcp_long)
+rm(xxQ_long)# Las eliminamos porque ocupan mucha  memoria y no se van a usar más
+gc()#Garbage clear para liberar efectivamente la memoria
+colnames(resultados) <- c("date", ID_NAME$NAME)
+colnames(resultados_xxQ) <- c("date", ID_NAME$NAME)
+
+date_station$prcp <-  ifelse(is.na(date_station$flags), date_station$prcp, NA)
+
+
+##INCISO [IV]
+
+maxvalues <- date_station[order(desc(date_station$prcp))[1:10],] #Ordenamos de forma descendente los valores de prcp y seleccionamos los primeros 10 valores
+#Luego elegimos estos 10 valores como las filas que queremos del dataframe y dejamos todas las columnas agregando una coma al final
+
+
+##INCISO [V]
+
+#Vamos a hacer los promedios de lluvia por mes, eso lo tomamos como altura para el bar graph.
+prcp_avg_bymonth <- date_station%>% 
+mutate(
+  month = month(date_station$date)  
+) %>% 
+  select("prcp", "month") %>% 
+  group_by(month) %>% 
+  summarise(prcp_avg = mean(prcp, na.rm=T)) %>% 
+  mutate(
+  month_asstr = month.abb
+  )
+  
+#Graficamos y podemos observar como en verano llueve claramente mas que invierno
+  ggplot(prcp_avg_bymonth, aes(x = fct_relevel(month_asstr, "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"), y = prcp_avg)) +
+  geom_bar(stat = "identity", position = "dodge", fill = "deepskyblue", width = 0.6)+
+    geom_text(aes(label=round(prcp_avg, digits = 2)), position=position_dodge(width=0.9), vjust=-0.5)+
+  labs(title = "Distribución de precipitaciones diarias promedio por mes") +
+    theme(plot.title = element_text(size = 18))+
+  xlab("Month") +
+  ylab("Avg prcp")
+    #Grafico de barras sin linea pero con los meses ordenados por abreviacion
+
+  
+  ##INCISO [VI]
+ 
+  #2 pulgadas de lluvia, 2 pulgadas = 5.08cm = 50.8mm
+  #Necesito ordenar por año y filtrar todos los datos para los que prcp>=508. Despues tengo que contar cuantas veces aparece cada año
+  #Buscamos cuantas mediciones por año (un dia puede registrar varias) llovió 508 tenths of a mm o más.
+
+big_rains <- date_station %>% 
+  mutate(
+    year_proxy = year(date_station$date)  
+  ) %>% 
+  select("prcp", "year_proxy") %>% 
+  filter(date_station$prcp >= 508)
+
+big_rains <- data.frame(1900:1970 ,tabulate(big_rains$year)[1900:1970])
+colnames(big_rains) <- c("year", "frequency")
+
+ggplot(big_rains, aes(x = year, y = frequency))+
+  geom_point(stat = "identity", color = "red", alpha = 0.30, size = 7)+
+  geom_smooth(method = "lm", alpha = 0, color = "brown3", size = 2, )+
+  labs(title = "Number of readings per year that showed at least 2 inches(50.8mm) of rain in a day") +
+  theme(plot.title = element_text(size = 18))+
+  xlab("Year") +
+  ylab("Frequency")
+
+
+##INCISO [VII]
+
+#Quiero un vector con los nombres(o ID) y el estado, para poder hacer un left_join
+state <- read.csv(file_paths[1]) %>%
+  select("ID", "ST")
+ID_NAME_ST <- left_join(x = ID_NAME, y=state, by="ID")
+colnames(ID_NAME_ST) <- c("ID", "station", "ST")
+rm(state)
+
+resultados_proxy <- resultados
+colnames(resultados_proxy) <- c("date", ID_NAME$ID)#Ordenamos por ID porque algunos nombre de estacion se repiten pero son diferentes IDs.
+#Caso contrario generamos valores adicionales durante el leftjoin, como estan linkeados los ID a los ST los cambiamos desps.
+proxy <- pivot_longer(resultados_proxy,cols = 2:750, names_to = "ID", values_to = "prcp")
+
+proxy <- left_join(x=proxy, y=ID_NAME_ST, by="ID") %>%
+  select("ST")
+date_station <- date_station %>% mutate(ST = proxy$ST)
+rm(proxy)
+rm(resultados_proxy)
+gc()
+
+prcp_avg_byyear <- date_station %>% mutate(
+  year = year(date_station$date)  
+) %>% 
+  select("prcp", "year") %>% 
+  group_by(year) %>% 
+  summarise(prcp_avg = mean(prcp, na.rm=T))
+
+prcp_avg_bystate <- date_station %>% 
+  select("prcp", "ST") %>% 
+  group_by(ST) %>% 
+  summarise(prcp_avg = mean(prcp, na.rm=T))
+
+
+maxmin_byyear <- data.frame(prcp_avg_byyear[order(desc(prcp_avg_byyear$prcp_avg))[c(1,71)],], c("max", "min"))
+maxmin_bystate <- data.frame(prcp_avg_bystate[order(desc(prcp_avg_bystate$prcp_avg))[c(1,12)],], c("max", "min"))
+
+
+##INCISO [VIII]
+
+#Armamos promedios estatales para diferencia en lluvia promedio entre cada mitad de la muestra.
+proxy <- date_station %>%
+  mutate(
+  year = year(date_station$date)
+) %>% 
+  select("year", "ST", "prcp")
+
+prcp_avg_firsthalf <- proxy %>%
+    filter(proxy$year <= 1935)%>% 
+    group_by(ST) %>% 
+    summarise(prcp_avg = mean(prcp, na.rm=T))
+    
+prcp_avg_secondhalf <- proxy %>%
+  filter(proxy$year > 1935)%>% 
+  group_by(ST) %>% 
+  summarise(prcp_avg = mean(prcp, na.rm=T))  
+
+
+#Ecribimos los estados como aparecen en el paquete maps(strings en minuscula), pero en el orden de los state codes para que correspondan
+midwest_states <- c("iowa", "illinois", "indiana", "kansas", "michigan", "minnesota", "missouri", "north dakota", "nebraska", "ohio", "south dakota", "wisconsin")
+
+prcp_difference <- prcp_avg_firsthalf %>% mutate(
+  prcp_avg2 = prcp_avg_secondhalf$prcp_avg,
+  diff_in_avg_prcp = prcp_avg2 - prcp_avg,
+  region = midwest_states) %>% 
+  select("ST","region" ,"diff_in_avg_prcp")
+
+mapdata <- map_data("state", region = midwest_states)
+mapdata <- left_join(mapdata, prcp_difference, by = "region")
+
+cnames <- aggregate(cbind(long, lat) ~ ST, data=mapdata, FUN=mean) #Promedio de latitud y longitud de todos los puntos bordes. No se distribuyen
+#de manera uniforme. Voy a cambiar los valores de latitud y longitud para centrarlos.
+cnames[2,] <- data.frame("IL", -89.03427, 40.37624)
+cnames[3,] <- data.frame("IN", -86.17717, 39.84625)
+cnames[4,] <- data.frame("KS", -98.60296, 38.79041)
+cnames[5,] <- data.frame("MI", -84.895383, 43.30089)
+cnames[6,] <- data.frame("MN", -94.60293, 45.90226)
+cnames[7,] <- data.frame("MO", -92.85799, 38.65068)
+cnames[8,] <- data.frame("ND", -100.20431, 47.43643)
+cnames[9,] <- data.frame("NE", -99.54774, 41.71496)
+cnames[10,] <- data.frame("OH", -82.9665, 40.30187)
+cnames[11,] <- data.frame("SD", -100.14632, 44.49688)
+cnames[12,] <- data.frame("WI", -90.04099, 44.9597)
+
+ggplot(mapdata, aes(x= long,y= lat))+
+  geom_polygon(aes(fill = diff_in_avg_prcp, , group = group), color = "black")+
+  geom_text(data=cnames, aes(x=long, y=lat, label=ST ), size=7)+
+  scale_fill_gradientn(colours=c("tomato4", "tomato", "white", "steelblue2"), values=rescale(c(-5,-2,0,2)))+
+  labs(title = "Difference in average rainfall between 1900-1935 and 1936-1970 for the Midwest")+
+  theme(plot.title = element_text(size = 18))+
+  xlab("Longitude")+
+  ylab("Latitude")
+
+##--------------------------------------------------------------------------------------------------------------------##
+##--------------------------------------------------------------------------------------------------------------------##
+##Ejercicio 4##
+rm(list=ls())
+install.packages("wooldrige")
+library(wooldridge)
+install.packages("ggplot2")
+library(ggplot2)
+install.packages("gghighlight")
+library(gghighlight)
+
+#Inciso 1
+
+funcionrss <- function(x, y, a, b){
+  sum((y - (a + b*x))^2)}
+
+#Inciso 2
+
+read.table(file='/Users/nicolaspetri/Desktop/Domiciliario_R/hibbs.dat')
+
+#Usamos la función read table para extraer los datos del archivo hibbs.dat y guardamos los mismos en el df "data".
+
+datos = read.table(file='/Users/nicolaspetri/Desktop/Domiciliario_R/hibbs.dat')
+
+#IOS no procesa muy bien los archivos .dat, por lo que para que en un principio los nombres de las columnas eran
+#V1, V2, V3, V4 y V5. Para hacer que las columnas tengan los nombres que necesitamos:
+
+names <- datos[1,] #Extraemos del df los nombres que queremos que tomen las columnas 
+colnames(datos) <- names[1,] #y creamos una nueva variable con el nombre "names".
+#Con el comando colnames() reemplazamos el nombre anterior de las columnas 
+electiondata <- datos[-1,]
+#por el nuevo que sacamos de la variable "names". Por último eliminamos la fila que no nos sirve.
+#Esta era la que tenía los nombres que queríamos ponerle a las nuevas columnas.
+
+#El df está en strings por lo que lo debemos pasar a numeric
+electiondata$growth <- as.numeric(electiondata$growth)
+electiondata$vote <- as.numeric(electiondata$vote) 
+
+minimos_cuadrados <- lm(vote ~ growth, data = electiondata) #Hacemos una regresión lineal tomando a vote como la
+#Variable dependiente y a growth como la variable independiente
+summary(minimos_cuadrados)
+
+#Inciso 3
+#a
+
+y <- electiondata$vote #Como indicaba el enunciado el argumento y es la columna ”vote” del dataset, 
+x <- electiondata$growth #el argumento x es la columna "growth" 
+b <- 3.0605 #el parámetro b es el valor del coeficiente estimado por OLS en el inciso anterior.
+a <- seq(-1000, 1000) #A son valores arbitrarios elegidos por nosotros
+
+a <- as.numeric(a) 
+
+grafico <- data.frame(a, rssval = NA) #Armamos un vector con 2001 filas y 2 columnas
+#En la primera están los valores que toma a. La segunda, por el momento, está yena de NAs.
+#Con el siguiente for loop se irán reemplazando los NAs por los diferentes valores que toma la función "funcionrss"
+#para los distintos valores de a.
+
+for(a in seq(-1000,1000)){
+  grafico$rssval[a+1001] <- funcionrss(x, y, a, b)
+}
+
+min_rssval <- min(grafico$rssval) #Buscamos el valor minimo que toma la función "funcionrss"
+
+pos_min <- which.min(grafico$rssval) #Nos fijamos en que fila se encuentra este valor minimo de la función
+
+valminrss <- grafico[pos_min, ] #Extraemos la fila con el valor mínimo de a
+
+val_min_a <- valminrss$a #Almaenamos el valor mínimo de a en "val_min_a"
+
+#Vemos que el a que minimiza la rss es 46
+
+#El a es estimado por OLS es 46.2476
+
+#El grafico sin el zoom
+ggplot(data = grafico, aes(x = a, y = rssval)) + geom_line(color='red') + geom_point(data = valminrss, colour = "black")
+
+#El grafico zoomeado
+ggplot(data = grafico, aes(x = a, y = rssval)) + geom_line(color='red') + geom_point(data = valminrss, colour = "black") + coord_cartesian(xlim=c(-200,200)) #Hacemos uso del comando coord_cartesian para zoomear en el gráfico
+#Ploteamos un grafico donde en el eje x
+#se encuentran los diferentes valores de a. En el eje y, vemos los diferentes valores que toma la función.
+
+
+#Inciso 3
+#b
+#Esta segunda parte del inciso 3 sigue el mismo proceso que la primera parte.
+#Lo único que varía es que, en este caso, el a utilizado es el estiamdo por OLS en el inciso 2.
+#Y elegimos arbitrariamente los valores para b.
+
+funcionrss_new <- function(x, y, a_new, b_new){
+  sum((y - (a_new + b_new*x))^2)}
+
+y <- electiondata$vote
+x <- electiondata$growth
+b_new <- seq(-1000, 1000) #Ahora el parametró que variará es b. 
+a_new <- 46.2476 #a es el obtenido por la estimación de OLS en el inciso 2.
+
+b_new <- as.numeric(b_new)
+
+#Esta parte del código es lo mismo que la de la primera parte. 
+#Lo único que cambia son los nombres de las variables y dado que el parámetro que varía es b, 
+#ahora el for loop iterará para diferentes valores de b.
+
+grafico_new <- data.frame(b_new, rssval_new = NA)
+
+for(b_new in seq(-1000,1000)){
+  grafico_new$rssval_new[b_new+1001] <- funcionrss(x, y, a_new, b_new)
+}
+
+min_rssval_new <- min(grafico_new$rssval_new)
+
+pos_min_new <- which.min(grafico_new$rssval_new)
+
+valminrss_new <- grafico_new[pos_min_new, ]
+
+val_min_b <- valminrss_new$b_new
+
+ggplot(data = grafico_new, aes(x = b_new, y = rssval_new)) + geom_line(color='blue') + geom_point(data = valminrss_new, colour = "black")
+
+#Vemos que el b que minimiza la rss es 3
+
+#Es el mismo que el estimado por OLS
+
+#Inciso 4
+#Para distintos valores de a
+#En este último inciso debemos repetir lo realizado en el inciso 3. Solo que debemos modificar levemente la 
+#función para así obtener la suma de desvíos absolutos.
+#Para hacer esto eliminamos el "elevado al cuadrado" de (a + b*x) y agregamos un abs a (y - (a + b*x)). 
+#Llamamos a esta nueva función "funcionsda".
+#Como en el inciso 3, en la primera parte del ejercicio usamos el b estiamdo por OLS en el inciso 2 y tomamos
+#un rango de valores para a arbitrariamente.
+#Salvo por cómo esta compuesta la función, todo el código es básicamente igual, salvo por los nombres de las variables.
+
+funcionsda <- function(x, y, a, b){
+  sum(abs(y - (a + b*x)))} 
+
+a <- seq(-1000, 1000)
+
+a <- as.numeric(a)
+
+graficosda <- data.frame(a, sdaval = NA)
+
+for(a in seq(-1000,1000)){
+  graficosda$sdaval[a+1001] <- funcionsda(x, y, a, b)
+}
+
+min_sdaval <- min(graficosda$sdaval)
+
+pos_min_sda <- which.min(graficosda$sdaval)
+
+valminsda <- grafico[pos_min_sda, ]
+
+val_min_a_sda <- valminsda$a
+
+ggplot(data = graficosda, aes(x = a, y = sdaval)) + geom_line(color='red') 
+
+#+ coord_cartesian(xlim=c(-100,100)) en caso de querer ver el gráfico con un "zoom" hay que agregar esto al código de ggplot.
+
+#El a que minimiza la suma de los desvíos absolutos es 47
+
+#Para distintos valores de b
+#Para esta segunda parte, al igual que en el inciso anterior, usamos el a estimado por OLS en el inciso 2.
+#Y elegimos un rango de valores para b.
+funcionsda_new <- function(x, y, a_new, b_new){
+  sum(abs(y - (a_new + b_new*x)))}
+
+b_new <- seq(-1000, 1000)
+a_new <- 46.2476 
+
+b_new <- as.numeric(b_new)
+
+grafico_new_sda <- data.frame(b_new, sdaval_new = NA)
+
+for(b_new in seq(-1000,1000)){
+  grafico_new_sda$sdaval_new[b_new+1001] <- funcionsda(x, y, a_new, b_new)
+}
+
+ggplot(data = grafico_new_sda, aes(x = b_new, y = sdaval_new)) + geom_line(color='blue') 
+
+min_sdaval_new <- min(grafico_new_sda$sdaval_new)
+
+pos_minsda_new <- which.min(grafico_new_sda$sdaval_new)
+
+valminsda_new <- grafico_new_sda[pos_minsda_new, ]
+
+val_min_b_sda <- valminsda_new$b_new
+
+#El b que minimiza la suma de los desvíos absolutos es 3
+
+
+##--------------------------------------------------------------------------------------------------------------------##
+##--------------------------------------------------------------------------------------------------------------------##
+##Ejercicio 5##
+rm(list=ls())
+library(tidyverse)
+
+datos <- read.csv("D:/R/Lab/DataEj5/earnings.csv") %>% #cambiamos el orden de las variables
+  select("earnk", "height", "weight", "male", "ethnicity", "education", "mother_education", "father_education", "walk", "exercise", "smokenow", "tense", "angry", "age")
+ 
+
+
+##INCISO [I]
+
+#Armo un dataframe para volcar los resultados y poder comparar los AIC
+resultados_forward_stepwise <- data.frame(c("m0","m1","m2","m3", "m4", "m5", "m6", "m7", "m8", "m9", "m10", "m11", "m12", "m13"),c(1:14)*NA, c(1:14)*NA)
+colnames(resultados_forward_stepwise) <- c("mX","formula", "AIC")
+
+
+
+#Definimos un vector al que le saco columnas y uno fijo
+explicativas <- datos
+colnames(explicativas) <- c("y", "x1", "x2", "x3", "x4", "x5", "x6", "x7", "x8", "x9", "x10", "x11", "x12", "x13")
+#explicativas_proxy <- explicativas, va a existir en el local environment de la funcion
+
+
+
+#Creamos una funcion que hace el forward stepwise para una cantidad 'n' de variables explicativas. Esta funcion precisa que la variable independiente
+#esté en la primera columna de los datos y que 
+
+forward_stepwise <- function(n){
+  
+  k=0
+  explicativas_proxy <- explicativas
+  
+  mX <- list()
+  m_form <- c()
+  m_form[k+1] <- paste(colnames(explicativas)[1], "~", 1)
+  mX[[k+1]] <- as.formula(lm(m_form[k+1], data = explicativas))
+
+
+    while(k<n){
+    
+      m_candidates_form <- c()
+      rss <- c()
+  
+        for (i in 2:(n+1-k)){
+          m_candidates_form[i-1] <- paste(m_form[k+1], "+", colnames(explicativas_proxy)[i])
+          rss[i-1] <- deviance(lm(m_candidates_form[i-1], data=explicativas))
+        }
+      
+    m_form[k+2] <- m_candidates_form[which(min(rss)==rss)[1]] #Cuidado que elimina 2 cuando hay varios minimos
+    mX[[k+2]] <- as.formula(lm(m_form[k+2], data = explicativas))
+    explicativas_proxy <- explicativas_proxy[-(which(min(rss)==rss)[1]+1)]
+  
+  
+    k = k+1
+  
+    }
+  
+  mX_aic <- c()
+  for(i in 1:(n+1)){
+    mX_aic[i] <- AIC(lm(m_form[i], data = explicativas))
+  }
+  
+  return(data.frame(m_form, mX_aic))
+}
+
+
+
+
+resultados_forward_stepwise[,2:3] <- forward_stepwise(13)
+
+
+best_form_fwdstep <- data.frame(resultados_forward_stepwise[which(min(resultados_forward_stepwise$AIC)==resultados_forward_stepwise$AIC),1:2])
+best_reg_fwdstep <- lm(resultados_forward_stepwise[which(min(resultados_forward_stepwise$AIC)==resultados_forward_stepwise$AIC),2], data = explicativas)
+
+
+
+
+##INCISO [II]
+
+#Dos metodos, ir sacando variables o ir agregando variables negativas, o usar el puntito
+
+##CAMBIAR LAS ITERACIONES DEL LOOP i CON UN "-" Y EL CASO BASE A TODAS LAS VARIABLES EXPLICATIVAS, GUARDA CON M0
+#Armo un dataframe para volcar los resultados y poder comparar los AIC
+
+resultados_backward_stepwise <- data.frame(c("m0","m1","m2","m3", "m4", "m5", "m6", "m7", "m8", "m9", "m10", "m11", "m12", "m13"),c(1:14)*NA, c(1:14)*NA)
+colnames(resultados_backward_stepwise) <- c("mX","formula", "AIC")
+
+
+backward_stepwise <- function(n){
+  
+  k=n
+  explicativas_proxy <- explicativas
+  
+  mX <- list()
+  m_form <- c()
+  m_form[k+1] <- paste(colnames(explicativas)[1], "~", ".")
+  mX[[k+1]] <- as.formula(lm(m_form[k+1], data = explicativas))
+  
+  
+  
+  
+  while(0<k & k<=n){
+    
+    m_candidates_form <- c()
+    rss <- c()
+    
+    for (i in 2:(k+1)){
+      m_candidates_form[i-1] <- paste(m_form[k+1], "-", colnames(explicativas_proxy)[i])
+      rss[i-1] <- deviance(lm(m_candidates_form[i-1], data=explicativas))
+    }
+    
+    m_form[k] <- m_candidates_form[which(min(rss)==rss)[1]] #Cuidado que elimina 2 cuando hay varios minimos
+    mX[[k]] <- as.formula(lm(m_form[k], data = explicativas))
+    explicativas_proxy <- explicativas_proxy[-(which(min(rss)==rss)[1]+1)]
+    
+    
+    k = k-1
+    
+  }
+  
+  mX_aic <- c()
+  for(i in 1:(n+1)){
+    mX_aic[i] <- AIC(lm(m_form[i], data = explicativas))
+  }
+  
+  return(data.frame(m_form, mX_aic))
+}
+
+
+resultados_backward_stepwise[,2:3] <- backward_stepwise(13)
+
+
+best_form_backstep <- data.frame(resultados_backward_stepwise[which(min(resultados_backward_stepwise$AIC)==resultados_backward_stepwise$AIC),1:2])
+best_reg_backstep <- lm(resultados_backward_stepwise[which(min(resultados_backward_stepwise$AIC)==resultados_backward_stepwise$AIC),2], data = explicativas)
