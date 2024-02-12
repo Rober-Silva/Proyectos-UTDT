@@ -1,0 +1,162 @@
+%Este script encuentra los umbrales de entrada y salida para un proyecto de
+%inversión para distintos parámetros de un Brownian Motion que caracteriza
+%al flujo de beneficios
+
+clear all
+
+
+sigmas = [0.1];
+thresholds = zeros(2,1);
+
+mu = 0.4;
+sigma = 0.1;
+rho = 0.9;
+b11 = (mu - (sigma^2)/2)/sigma^2;
+b22 = b11^2 + 2*rho/sigma^2;
+beta1 = -b11 + b22^(1/2);
+beta2 = -b11 - b22^(1/2); %Exponentes de la solución homogénea con b1>1, b2<0
+    
+    
+%Los valores II y EE los definimos en el archivo de inversión, II es x(1), ya que el valor de entrada es pi y entramos cuando pi=pisuprabarra y
+%EE es x(2)/4 ya que el valor de salida es pi/4 y salimos cuando pi=pisubbarra. Basicamente endogenizamos los valores de entrada y salida
+%del proyecto para luego despejarlos en el sistema de ecuaciones.
+
+x0 = [1; 0.5; 3; 0.001];
+x = fsolve(@inversion, x0, optimset('MaxFunEvals', 50000, 'MaxIter', 10000), rho, mu, beta1, beta2);
+ 
+thresholds(:,1) = x(1:2,1); %Me quedo solo con los valores de los umbrales
+umbrales = table (thresholds,'VariableNames',{'umbrales'}, 'Rownames', {'π-entrada' 'π-salida'})
+
+
+
+rng(19) %seteamos seed para que cruze ambos umbrales
+ 
+% Proceso que siguen las Ganancias   dPI/PI = ALFA*dt + SIGMA*dz
+N = 1000; 
+dt = 1/N;
+periodos = 5000;
+PI0 = thresholds(2);
+rho = 0.9;
+alpha = 0.4;
+sigma = 0.1;
+
+PIS = zeros(periodos,1);
+epsilon = normrnd(0,1,periodos);
+T = dt:dt:(periodos/N);
+
+PIen = thresholds(1);   % Valor del proyecto al momento de entrada
+PIex = thresholds(2);   %Valor del proyecto al momento de salida
+
+for ii = 1:periodos 
+if ii == 1 
+PI = PI0;
+end
+PI = PI*exp(alpha*dt + sigma*sqrt(dt)*epsilon(ii));   %Proceso que siguen los dividendos. 
+PIS(ii,1)= PI;
+end
+
+%Grafico local para 500 periodos
+ figure
+ plot(T(1:500),PIS(1:500),T(1:500),PIen*ones(500,1), T(1:500), PIex*ones(500,1));
+ title('Retorno del Proyecto y umbrales - Grafico Local');         
+ xlabel('Time');
+ ylabel('Retorno del proyecto');
+ legend('π','π-entry', 'π-exit', 'location','best','orientation','vertical'), legend boxoff
+ 
+ 
+ 
+ 
+ %%
+ %Grafico para los 5000 periodos
+ figure
+ plot(T,PIS,T,PIen*ones(periodos,1), T, PIex*ones(periodos,1));
+ title('Retorno del Proyecto y umbrales');         
+ xlabel('Time');
+ ylabel('Retorno del proyecto');
+ legend('π','π-entry', 'π-exit', 'location','best','orientation','vertical'), legend boxoff
+ 
+
+
+
+
+
+
+
+
+
+
+
+
+%%%Trabajo Práctico 3%%%
+%%Posinovec-Romero-Silva-Wende%%%
+
+
+%%Ejercicio 3
+clear all
+
+rng(1) %Seteamos seed
+
+reps = 20000;
+calls = zeros(reps,1);
+st = zeros(reps,1);
+T = [30,60,90];
+
+S0 = 100;
+z0 = 1;
+strike = 102;
+r = 0.03;
+delta = 1/365;
+
+B1 = [0.8, 0.5, 0.9];
+B0 = 0.2*(1-B1);
+
+h0 = B0/(1-B1);
+sigma = sqrt(B0/(1-B1));
+stt = [S0; zeros(T(3),1)];
+htt = [h0; zeros(T(3),1)];
+
+for betas = 1:3;
+
+for i = 1:reps; %Este loop es el de las repeticiones: en cada una, simulo una trayectoria
+    ztt = [z0; normrnd(0,1,T(3),1)];
+    
+    for g = 1:3;    
+    
+    for j = 2:T(g)+1; %Este loop es para simular cada trayectoria individual
+        htt(j) = B0(betas) + B1(betas)*htt(j-1)*ztt(j-1)^2;
+        stt(j) = stt(j-1)*exp((r-0.5*(htt(j))*delta + sqrt(delta)*sqrt(htt(j))*ztt(j-1) )*(1/365) + sqrt(sigma^2*1/365)*ztt(j-1)); %Simulo las trayectorias
+        %Uso la formula en las notas de clase, y con eso  veo que
+        %s(t)=s(t-1)*exp(....) , que es lo que estamos usando aca.
+    end
+    %Finalizada la trayectoria
+    if stt(T(g)+1) - strike > 0; %Si el precio del stock es mayor al SP... NOTAR: ES T+1 porque la primera observacion
+        % es  S0 
+        calls(i,g) = (stt(T(g)+1) - strike) * exp(-r*T(g)/365); %Ejecuto y gano S_{T}-strike. Como ese pago lo obtengo en T, 
+        %lo tengo que descontar para tenerlo en plata de hoy.
+    else
+        calls(i,g) = 0;
+    end
+   
+    
+end
+
+
+end
+CallM(1:3,betas) = mean(calls);
+
+end
+
+% B-S valúa el call en:
+for i = 1:3
+    d1 = ((log(S0) - log(strike) + ((T(i)/365) * (r+(.5*sigma^2))))/(sqrt(sigma^2*((T(i))/365))));
+    d2 = d1 - sqrt(sigma^2*(T(i))/365);
+
+    CallBS(i,1) = S0 * normcdf(d1) - strike * exp(-r*(T(i)/365)) * normcdf(d2);
+end
+
+
+
+%BS tiene varianza constante 0.2, por lo que podemos interpretarlo como
+%B0=0.2 y B1=0. A contiuacion los resultados en una matriz.
+
+results = table([CallBS], [CallM(1:3,1)], [CallM(1:3,2)], [CallM(1:3,3)], 'VariableNames', {'Black-Scholes','B0=0.04 & B1=0.8', 'B0=0.1 & B1=0.5', 'B0=0.02 & B1=0.9'}, 'RowNames', {'30 day', '60 day', '90 day'})
