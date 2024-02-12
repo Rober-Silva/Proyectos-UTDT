@@ -1,0 +1,830 @@
+library(tidyverse)
+
+#https://www.datafiles.samhsa.gov/dataset/national-survey-drug-use-and-health-2021-nsduh-2021-ds0001
+
+#load("D:/UTDT/8vo Semestre/Machine Learning/Proyecto final/NSDUH/NSDUH_2021.RData")
+#ogdata <- PUF2021_100622
+#rm(PUF2021_100622)
+datacln <- ogdata
+tags <- c()
+
+##Queremos transformar las variables a algo que podamos usar, esto requiere un trabajo manual muy grande
+##Voy a usar el codebook para recodificar los resultados
+
+
+##Tabaco##
+datacln$cigever[datacln$cigever==2] = 0
+datacln$cigtry[datacln$cigtry>100] = NA
+datacln$cigmfu[datacln$cigmfu>13] = NA
+datacln$cigrec[datacln$cigrec>4 & datacln$cigrec<40] = 4
+datacln$cigrec[datacln$cigrec>4] = 5
+datacln$CIG30USE[datacln$CIG30USE>30] = 0
+datacln$CIG30AV[datacln$CIG30AV>8] = 0
+datacln$CIG30MEN[datacln$CIG30MEN>1] = 0
+datacln$CIG30RO2[datacln$CIG30RO2>1] = 0
+datacln$cigdlymo[datacln$cigdlymo>1] = 0
+datacln$cigage[datacln$cigage>100] = NA
+datacln$cigdlmfu[datacln$cigdlmfu>13] = NA
+datacln$CIG100LF[datacln$CIG100LF>1] = 0
+datacln$smklssevr[datacln$smklssevr>1] = 0
+datacln$smklsstry[datacln$smklsstry>100] = NA
+datacln$smklssrec[datacln$smklssrec>4] = 0
+datacln$cigarevr[datacln$cigarevr>1] = 0
+datacln$cigartry[datacln$cigartry>100] = NA
+datacln$cigarrec[datacln$cigarrec>4] = 0
+datacln$pipever[datacln$pipever>1] = 0
+datacln$PIPE30DY[datacln$PIPE30DY>1] = 0
+
+tags <- c(tags,
+          c(which(colnames(datacln) %in% c("cigever", "cigtry", "cigmfu", "cigrec", "CIG30USE",
+                                           "CIG30AV", "CIG30MEN", "CIG30RO2", "cigdlymo", "cigage",
+                                           "cigdlmfu", "CIG100LF", "smklssevr", "smklsstry", "smklssrec",
+                                           "cigarevr", "cigartry", "cigarrec", "pipever", "PIPE30DY")))
+)
+
+
+##Alcohol##
+datacln$alcever[datacln$alcever>1] = 0
+datacln$alctry[datacln$alctry>100] = NA
+datacln$alcrec[datacln$alcrec==8] = 2
+datacln$alcrec[datacln$alcrec>3 & datacln$alcrec<15] = 3
+datacln$alcrec[datacln$alcrec>3] = 4
+datacln$alcyrtot[datacln$alcyrtot>365] = 0
+datacln$albstway[datacln$albstway>3] = 4
+datacln$alcdays[datacln$alcdays>30] = 0
+datacln$AL30EST[datacln$AL30EST>6] = 0
+datacln$ALCUS30D[datacln$ALCUS30D>100] = 0
+datacln$ALCBNG30D[datacln$ALCBNG30D>30] = 0
+
+tags <- c(tags, 
+c(which(colnames(datacln) %in% c("alcever", "alctry", "alcrec", "alcyrtot", "albstway",
+                                           "alcdays", "AL30EST", "ALCUS30D", "ALCBNG30D")))
+)
+
+
+##Marihuana##
+datacln$mjever[datacln$mjever>1] = 0
+datacln$mjage[datacln$mjage>100] = NA
+datacln$mjrec[datacln$mjrec==11] = 1
+datacln$mjrec[datacln$mjrec==8 | datacln$mjrec==12] = 2
+datacln$mjrec[datacln$mjrec==9 | datacln$mjrec==13] = 3
+datacln$mjrec[datacln$mjrec>3] = 4
+datacln$mjyrtot[datacln$mjyrtot>365] = 0
+datacln$mrbstway[datacln$mrbstway>3] = 4
+datacln$MJDAY30A[datacln$MJDAY30A>30] = 0
+
+tags <- c(tags,
+c(which(colnames(datacln) %in% c("mjever", "mjage", "mjrec", "mjyrtot", "mrbstway", "MJDAY30A")))
+)
+
+  
+##Drogas Duras##
+#Para esta parte vamos a usar 2 preguntas para cada droga, si alguna vez conusmió dicha droga y
+#hace cuanto fue el último consumo (Escala 1,2,3 como en la base de datos y 4 si nunca usó)
+  
+##Cocaina##
+datacln$cocever[datacln$cocever>1] = 0
+datacln$cocrec[datacln$cocrec==11] = 1
+datacln$cocrec[datacln$cocrec==8 | datacln$cocrec==12] = 2
+datacln$cocrec[datacln$cocrec==9 | datacln$cocrec==13] = 3
+datacln$cocrec[datacln$cocrec>3] = 4
+
+tagcoc <- c(which(colnames(datacln)=="cocever"),which(colnames(datacln)=="cocrec"))
+  
+
+##Crack de cocaina##
+datacln$crkever[datacln$crkever>1] = 0
+datacln$crakrec[datacln$crakrec==11] = 1
+datacln$crakrec[datacln$crakrec==8 | datacln$crakrec==12] = 2
+datacln$crakrec[datacln$crakrec==9 | datacln$crakrec==13] = 3
+datacln$crakrec[datacln$crakrec>3] = 4
+
+tagcrack <- c(which(colnames(datacln)=="crkever"),which(colnames(datacln)=="crakrec"))
+
+##Heroina##
+datacln$herever[datacln$herever>1] = 0
+datacln$herrec[datacln$herrec == 11] = 1
+datacln$herrec[datacln$herrec == 8 | datacln$herrec == 12] = 2
+datacln$herrec[datacln$herrec == 9 | datacln$herrec == 13] = 3
+datacln$herrec[datacln$herrec > 3] = 4
+
+taghero <- c(which(colnames(datacln)=="herever"),which(colnames(datacln)=="herrec"))
+
+
+##Halucinogenos##
+#for (i in (which(colnames(datacln)=="lsd"):which(colnames(datacln)=="salviadiv")) ) {
+#  datacln[,i][datacln[,i]>1] = 0  
+#}
+#datacln$hallucoth[datacln$hallucoth==5] = 1
+#datacln$hallucoth[datacln$hallucoth>1] = 0
+datacln$hallucrec[datacln$hallucrec == 11] = 1
+datacln$hallucrec[datacln$hallucrec == 8 | datacln$hallucrec == 12] = 2
+datacln$hallucrec[datacln$hallucrec == 9 | datacln$hallucrec == 13] = 3
+datacln$hallucrec[datacln$hallucrec > 3] = 4
+datacln$hallucevr[datacln$hallucevr>1] = 0
+
+taghalu <- c(which(colnames(datacln)=="hallucevr"),which(colnames(datacln)=="hallucrec"))
+#c((which(colnames(datacln)=="lsd"):which(colnames(datacln)=="salviadiv")), which(colnames(datacln)=="hallucoth"), which(colnames(datacln)=="hallucevr"), which(colnames(datacln)=="hallucrec"))
+
+
+##Inhalables##
+#for (i in (which(colnames(datacln)=="amylnit"):which(colnames(datacln)=="inhaloth")) ) {
+#  datacln[,i][datacln[,i]>1] = 0  
+#}
+
+datacln$inhalever[datacln$inhalever>1] = 0
+datacln$inhalrec[datacln$inhalrec == 11] = 1
+datacln$inhalrec[datacln$inhalrec == 8 | datacln$inhalrec == 12] = 2
+datacln$inhalrec[datacln$inhalrec == 9 | datacln$inhalrec == 13] = 3
+datacln$inhalrec[datacln$inhalrec > 3] = 4
+
+taginh <- c(which(colnames(datacln)=="inhalever"), which(colnames(datacln)=="inhalrec"))
+#c((which(colnames(datacln)=="amylnit"):which(colnames(datacln)=="inhaloth")), which(colnames(datacln)=="inhalrec"))
+
+
+##Metanfetamina##
+datacln$methamevr[datacln$methamevr>1] = 0
+datacln$methamrec[datacln$methamrec == 11] = 1
+datacln$methamrec[datacln$methamrec == 8 | datacln$methamrec == 12] = 2
+datacln$methamrec[datacln$methamrec == 9 | datacln$methamrec == 13] = 3
+datacln$methamrec[datacln$methamrec > 3] = 4
+
+tagmeth <- c(which(colnames(datacln)=="methamevr"),which(colnames(datacln)=="methamrec"))
+  
+
+##Pain killers##
+datacln$pnrnmlif[datacln$pnrnmlif==5] = 1
+datacln$pnrnmlif[datacln$pnrnmlif>1] = 0
+datacln$pnrnmrec[datacln$pnrnmrec == 11] = 1
+datacln$pnrnmrec[datacln$pnrnmrec == 8 | datacln$pnrnmrec == 12] = 2
+datacln$pnrnmrec[datacln$pnrnmrec == 9 | datacln$pnrnmrec == 13] = 3
+datacln$pnrnmrec[datacln$pnrnmrec > 3] = 4
+
+tagpain <- c(which(colnames(datacln)=="pnrnmlif"),which(colnames(datacln)=="pnrnmrec"))
+
+
+##Tranquilizantes##
+datacln$trqnmlif[datacln$trqnmlif==5] = 1
+datacln$trqnmlif[datacln$trqnmlif>1] = 0
+datacln$trqnmrec[datacln$trqnmrec == 11] = 1
+datacln$trqnmrec[datacln$trqnmrec == 8 | datacln$trqnmrec == 12] = 2
+datacln$trqnmrec[datacln$trqnmrec == 9 | datacln$trqnmrec == 13] = 3
+datacln$trqnmrec[datacln$trqnmrec > 3] = 4
+
+tagtranq <- c(which(colnames(datacln)=="trqnmlif"),which(colnames(datacln)=="trqnmrec"))
+
+
+##Estimulantes##
+datacln$stmnmlif[datacln$stmnmlif==5] = 1
+datacln$stmnmlif[datacln$stmnmlif>1] = 0
+datacln$stmnmrec[datacln$stmnmrec == 11] = 1
+datacln$stmnmrec[datacln$stmnmrec == 8 | datacln$stmnmrec == 12] = 2
+datacln$stmnmrec[datacln$stmnmrec == 9 | datacln$stmnmrec == 13] = 3
+datacln$stmnmrec[datacln$stmnmrec > 3] = 4
+
+tagstim <- c(which(colnames(datacln)=="stmnmlif"),which(colnames(datacln)=="stmnmrec"))
+
+
+##Sedantes##
+datacln$sednmlif[datacln$sednmlif==5] = 1
+datacln$sednmlif[datacln$sednmlif>1] = 0
+datacln$sednmrec[datacln$sednmrec == 11] = 1
+datacln$sednmrec[datacln$sednmrec == 8 | datacln$sednmrec == 12] = 2
+datacln$sednmrec[datacln$sednmrec == 9 | datacln$sednmrec == 13] = 3
+datacln$sednmrec[datacln$sednmrec > 3] = 4
+
+tagsed <- c(which(colnames(datacln)=="sednmlif"),which(colnames(datacln)=="sednmrec"))
+
+
+###=======================================================================================###
+##Recency of Drug Use##
+datacln$ircigrc[datacln$ircigrc==9] = 5
+datacln$ircgrrc[datacln$ircgrrc==9] = 5
+datacln$irpipmn[datacln$irpipmn==9] = 3
+datacln$irsmklssrec[datacln$irsmklssrec==9] = 5
+datacln$iralcrc[datacln$iralcrc==9] = 4
+datacln$irmjrc[datacln$irmjrc==9] = 4
+tags <- c(tags,
+c(which(colnames(datacln) %in% c("ircigrc", "ircgrrc", "irpipmn", "irsmklssrec", "iralcrc", "irmjrc")))
+)
+
+##Binary(Recoded) Drug Use##
+c(which(colnames(datacln)=="cigflag") : which(colnames(datacln)=="mrjmon"))
+c(which(colnames(datacln)=="cduflag") : which(colnames(datacln)=="hvydrkmon"))
+c(which(colnames(datacln)=="tobalcflg") : which(colnames(datacln)=="tobalcmn"))
+c(which(colnames(datacln)=="alcydays") : which(colnames(datacln)=="mrjydays"))
+c(which(colnames(datacln)=="cigmdays") : which(colnames(datacln)=="mrjmdays"))
+c(which(colnames(datacln)=="bngdrmdays") : which(colnames(datacln)=="alcnumdkpm"))
+
+for ( i in ((which(colnames(datacln)=="FUCIG18"):which(colnames(datacln)=="FUMJ21"))) ) {
+  datacln[,i][datacln[,i]>1] = 0
+}
+tags <- c(tags,
+c(which(colnames(datacln)=="FUCIG18"):which(colnames(datacln)=="FUMJ21"))
+)
+
+##Special drugs## (cough syrup)
+datacln$coldmeds[datacln$coldmeds>1] = 0
+datacln$coldrec[datacln$coldrec==9] = 3
+datacln$coldrec[datacln$coldrec>3] = 4
+tags <- c(tags,
+c(which(colnames(datacln)=="coldmeds") : which(colnames(datacln)=="coldrec")),
+c(which(colnames(datacln)=="npcoldflag") : which(colnames(datacln)=="npcoldmon"))
+)
+
+##Risk/availability##
+for ( i in ((which(colnames(datacln)=="rskcigpkd"):which(colnames(datacln)=="rskbngwk"))) ) {
+  datacln[,i][datacln[,i]>4] = NA
+}
+for ( i in ((which(colnames(datacln)=="difgetmrj"):which(colnames(datacln)=="difgether"))) ) {
+  datacln[,i][datacln[,i]>5] = NA
+}
+datacln$appdrgmon[datacln$appdrgmon>2] = NA
+for ( i in ((which(colnames(datacln)=="rskyfqdgr"):which(colnames(datacln)=="rkfqpblt"))) ) {
+  datacln[,i][datacln[,i]>4] = NA
+}
+datacln$rkfqdblt[datacln$rkfqdblt>5] = NA
+tags <- c(tags,
+c(which(colnames(datacln)=="rskcigpkd") : which(colnames(datacln)=="APPDRGMON2"))
+)
+
+##Blunts##
+datacln$blntever[datacln$blntever==11] = 1
+datacln$blntever[datacln$blntever>5] = NA
+datacln$blntever[datacln$blntever>1] = 0
+datacln$blntage[datacln$blntage>80] = NA
+datacln$blntrec[datacln$blntrec==12] = 2
+datacln$blntrec[datacln$blntrec==9 | datacln$blntrec==19] = 3
+datacln$blntrec[datacln$blntrec>3] = 4
+datacln$BLNT30DY[datacln$BLNT30DY>30] = 0
+for ( i in ((which(colnames(datacln)=="blntnomj"):which(colnames(datacln)=="MEDMJPA2"))) ) {
+  datacln[,i][datacln[,i]==2] = 0
+  datacln[,i][datacln[,i]>1] = NA
+}
+tags <- c(tags,
+c(which(colnames(datacln) %in% c("blntever", "blntage", "blntrec", "BLNT30DY"))),
+c(which(colnames(datacln)=="blntnomj"):which(colnames(datacln)=="MEDMJPA2"))
+)
+
+##Nicotine dependence##
+for ( i in ((which(colnames(datacln)=="cigirtbl"):which(colnames(datacln)=="cigwake"))) ) {
+  datacln[,i][datacln[,i]>5] = NA
+}
+for ( i in ((which(colnames(datacln)=="ndssdepnd"):which(colnames(datacln)=="irpmnicdep"))) ) {
+  datacln[,i][datacln[,i]==9] = NA
+}
+tags <- c(tags,
+c(which(colnames(datacln)=="cigirtbl"):which(colnames(datacln)=="irpmnicdep"))
+)
+
+##Substance use disorder##
+for ( i in ((which(colnames(datacln)=="udaltimeuse"):which(colnames(datacln)=="udmjavwothr"))) ) {
+  datacln[,i][datacln[,i]==2] = 0
+  datacln[,i][datacln[,i]>1] = NA
+}
+tags <- c(tags,
+c(which(colnames(datacln)=="udaltimeuse"):which(colnames(datacln)=="udmjavwothr")))
+#Imputed SUD#
+datacln$IRPYSEV5ALC[datacln$IRPYSEV5ALC==9] = 0
+datacln$IRPYSEV5MRJ[datacln$IRPYSEV5MRJ==9] = 0
+tags <- c(tags,
+c(which(colnames(datacln) %in% c("IRPYUD5ALC", "IRPYUD5MRJ", "IRPYSEV5ALC", "IRPYSEV5MRJ")))
+)
+
+##Special Topics##
+datacln$booked[datacln$booked==3] = 1
+datacln$booked[datacln$booked==2] = 0
+datacln$booked[datacln$booked>1] = NA
+datacln$NOBOOKY2[datacln$NOBOOKY2==999] = 0
+datacln$NOBOOKY2[datacln$NOBOOKY2>3] = NA
+datacln$mxmjpnlt[datacln$mxmjpnlt>6] = NA
+datacln$parol[datacln$parol==2] = 0
+datacln$prob[datacln$prob==2] = 0
+tags <- c(tags,
+c(which(colnames(datacln) %in% c("booked", "NOBOOKY2", "mxmjpnlt", "DRVINALCO2", "DRVINMARJ2", "parol", "prob")) )
+)
+
+##Prior subst use##
+datacln$mrjyrbfr[datacln$mrjyrbfr>1] = 0
+datacln$mrjaglst[datacln$mrjaglst>100] = NA
+datacln$cigaglst[datacln$cigaglst>100] = NA
+datacln$cigdllst[datacln$cigdllst>100] = NA
+datacln$smkaglast[datacln$smkaglast>100] = NA
+datacln$cgraglst[datacln$cgraglst>100] = NA
+datacln$alcaglst[datacln$alcaglst>100] = NA
+datacln$cigyrbfr[datacln$cigyrbfr>1] = 0
+datacln$alcyrbfr[datacln$alcyrbfr>1] = 0
+tags <- c(tags,
+c(which(colnames(datacln) %in% c("mrjyrbfr", "mrjaglst", "cigaglst", "cigdllst", "smkaglast",
+  "cgraglst", "alcaglst", "cigyrbfr", "alcyrbfr")))
+)
+
+##Treatment##
+datacln$txyralc
+datacln$txyralnil
+datacln$TXYRUSEMRJ2
+datacln$txyrspalc
+datacln$txyspalnil
+datacln$ndfltxalc[datacln$ndfltxalc>1] = 0
+datacln$ndtxeftalc
+datacln$NOSPT5YRAL
+tags <- c(tags,
+c(which(colnames(datacln)=="txyrhosal"):which(colnames(datacln)=="txyrteleal"))
+)
+
+##Health##
+datacln$pregnant[datacln$pregnant>1] = 0
+for ( i in ((which(colnames(datacln)=="htanswer"):which(colnames(datacln)=="wtanswer"))) ) {
+  datacln[,i][datacln[,i]==2] = 0
+  datacln[,i][datacln[,i]>75] = NA
+}
+datacln$WTPOUND2[datacln$WTPOUND2>300] = NA
+datacln$NMERTMT2[datacln$NMERTMT2>50] = NA
+datacln$inhospyr[datacln$inhospyr==2] = 0
+datacln$inhospyr[datacln$inhospyr>1] = NA
+datacln$NMNGTHS2[datacln$NMNGTHS2>50] = NA
+datacln$NMVSOPT2[datacln$NMVSOPT2>50] = NA
+datacln$nmvsoest[datacln$nmvsoest>50] = NA
+datacln$hpalcnot[datacln$hpalcnot==95] = 1
+datacln$nonabovev[datacln$nonabovev==95] = 1
+for ( i in ((which(colnames(datacln)=="teleaptyr"):which(colnames(datacln)=="canceryr"))) ) {
+  datacln[,i][datacln[,i]==2] = 0
+  datacln[,i][datacln[,i]==5] = 1
+  datacln[,i][datacln[,i]>75] = NA
+}
+datacln$hrtcondag[datacln$hrtcondag>100] = NA
+datacln$hrtcondyr[datacln$hrtcondyr==5] = 1
+datacln$hrtcondyr[datacln$hrtcondyr==2] = 0
+datacln$hrtcondyr[datacln$hrtcondyr>1] = NA
+datacln$asthmanow[datacln$asthmanow==2] = 0
+datacln$asthmanow[datacln$asthmanow>1] = NA
+datacln$highbpmed[datacln$highbpmed==2] = 0
+datacln$highbpmed[datacln$highbpmed>1] = NA
+for ( i in ((which(colnames(datacln)=="diabeteag"):which(colnames(datacln)=="highbpage"))) ) {
+  datacln[,i][datacln[,i]>100] = NA
+}
+datacln$trimest[datacln$trimest==4] = 0
+tags <- c(tags,
+c(which(colnames(datacln)=="pregnant"):which(colnames(datacln)=="TELEAPTYR2"))
+)
+
+##Mental Health##
+for ( i in ((which(colnames(datacln)=="AMHINP2"):which(colnames(datacln)=="AMHTXYR4"))) ) {
+  datacln[,i][datacln[,i]>1] = 0
+}
+datacln$AMHTXND2[datacln$AMHTXND2==2] = 0
+tags <- c(tags,
+c(which(colnames(datacln)=="AMHINP2"):which(colnames(datacln)=="MHRSOTH2"))
+)
+
+##Soc Envir##
+for ( i in ((which(colnames(datacln)=="snystole"):which(colnames(datacln)=="snrlfrnd"))) ) {
+  datacln[,i][datacln[,i]>10] = NA
+}
+tags <- c(tags,
+c(which(colnames(datacln)=="snystole"):which(colnames(datacln)=="snrlfrnd"))
+)
+
+##youth exp##(Menores a 18 todos)
+datacln$yelstgrd[datacln$yelstgrd==5] = NA
+for ( i in ((which(colnames(datacln)=="yeatndyr"):which(colnames(datacln)=="yeyhgun"))) ) {
+  datacln[,i][datacln[,i]>10] = NA
+}
+for ( i in ((which(colnames(datacln)=="yeystole"):which(colnames(datacln)=="yefaldly"))) ) {
+  datacln[,i][datacln[,i]>10] = NA
+}
+for ( i in ((which(colnames(datacln)=="yetlknon"):which(colnames(datacln)=="yetlksop"))) ) {
+  datacln[,i][datacln[,i]==11] = 1
+  datacln[,i][datacln[,i]==6] = 0
+  datacln[,i][datacln[,i]>10] = NA
+}
+for ( i in ((which(colnames(datacln)=="yeprtdng"):which(colnames(datacln)=="yedgprgp"))) ) {
+  datacln[,i][datacln[,i]==2] = 0
+  datacln[,i][datacln[,i]>10] = NA
+}
+datacln$yeprgstd[datacln$yeprgstd==2] = 0
+datacln$yeprgstd[datacln$yeprgstd>1] = NA
+for ( i in ((which(colnames(datacln)=="yeschact"):which(colnames(datacln)=="yeothact"))) ) {
+  datacln[,i][datacln[,i]>10] = NA
+}
+for ( i in ((which(colnames(datacln)=="yedeclas"):which(colnames(datacln)=="yepvntyr"))) ) {
+  datacln[,i][datacln[,i]==2] = 0
+  datacln[,i][datacln[,i]>10] = NA
+}
+for ( i in ((which(colnames(datacln)=="yerlgsvc"):which(colnames(datacln)=="yerlfrnd"))) ) {
+  datacln[,i][datacln[,i]>10] = NA
+}
+for ( i in ((which(colnames(datacln)=="schfelt"):which(colnames(datacln)=="YOHGUN2"))) ) {
+  datacln[,i][datacln[,i]==2] = 0
+}
+for ( i in ((which(colnames(datacln)=="YOSTOLE2"):which(colnames(datacln)=="PRVDRGO2"))) ) {
+  datacln[,i][datacln[,i]==2] = 0
+}
+for ( i in ((which(colnames(datacln)=="PREGPGM2"):which(colnames(datacln)=="rlgfrnd"))) ) {
+  datacln[,i][datacln[,i]==2] = 0
+}
+tags <- c(tags,
+c(which(colnames(datacln)=="yeatndyr"):which(colnames(datacln)=="yeyhgun")),
+c(which(colnames(datacln)=="yeystole"):which(colnames(datacln)=="yedgprgp")),
+c(which(colnames(datacln)=="yeprgstd"):which(colnames(datacln)=="YOHGUN2")),
+c(which(colnames(datacln)=="YOSTOLE2"):which(colnames(datacln)=="PRVDRGO2")),
+c(which(colnames(datacln)=="PREGPGM2"):which(colnames(datacln)=="rlgfrnd"))
+)
+
+##Mental Health##
+datacln$dstworst[datacln$dstworst==2] = 0
+datacln$impgoutm[datacln$impgoutm==2] = 0
+datacln$imppeopm[datacln$imppeopm==2] = 0
+datacln$impsocm[datacln$impsocm==2] = 0
+datacln$imphhldm[datacln$imphhldm==2] = 0
+datacln$imprespm[datacln$imprespm==2] = 0
+for ( i in ((which(colnames(datacln)=="DSTNRV30"):which(colnames(datacln)=="impdyfrq"))) ) {
+  datacln[,i][datacln[,i]>80] = NA
+}
+datacln$impydays[datacln$impydays>500] = NA
+for ( i in ((which(colnames(datacln)=="suicthnk"):which(colnames(datacln)=="cosuiplnyr"))) ) {
+  datacln[,i][datacln[,i]==2] = 0
+  datacln[,i][datacln[,i]>80] = NA
+}
+for ( i in ((which(colnames(datacln)=="IRDSTNRV30"):which(colnames(datacln)=="ircosuitryyr"))) ) {
+  datacln[,i][datacln[,i]>8] = NA
+}
+
+tags <- c(tags,
+c(which(colnames(datacln)=="DSTNRV30"):which(colnames(datacln)=="whodasdaed")),
+seq(which(colnames(datacln)=="IRDSTNRV30"), which(colnames(datacln)=="ircosuitryyr"), by=2),
+c(which(colnames(datacln)=="KSSLR6MON"):which(colnames(datacln)=="micatpy"))
+)
+
+##Adult Depression## (18+)
+for ( i in ((which(colnames(datacln)=="addprev"):which(colnames(datacln)=="ADDPR2WK"))) ) {
+  datacln[,i][datacln[,i]==2] = 0
+  datacln[,i][datacln[,i]>50] = NA
+}
+for ( i in ((which(colnames(datacln)=="adwrhrs"):which(colnames(datacln)=="adwrimp"))) ) {
+  datacln[,i][datacln[,i]>50] = NA
+}
+datacln$addpprob[datacln$addpprob==2] = 0
+datacln$addpprob[datacln$addpprob>1] = NA
+datacln$adwrprob[datacln$adwrprob==2] = 0
+datacln$adwrprob[datacln$adwrprob>1] = NA
+datacln$adwrage[datacln$adwrage>900] = NA
+for ( i in ((which(colnames(datacln)=="adwrdepr"):which(colnames(datacln)=="adwrpreg"))) ) {
+  datacln[,i][datacln[,i]==2] = 0
+  datacln[,i][datacln[,i]>50] = NA
+}
+datacln$ADWRGNL2[datacln$ADWRGNL2>900] = NA
+datacln$adwrlose[datacln$adwrlose==2] = 0
+datacln$adwrlose[datacln$adwrlose>1] = NA
+datacln$adwrdiet[datacln$adwrdiet==2] = 0
+datacln$adwrdiet[datacln$adwrdiet>1] = NA
+datacln$ADWRLSL2[datacln$ADWRLSL2>900] = NA
+for ( i in ((which(colnames(datacln)=="adwrslep"):which(colnames(datacln)=="adsmmdea"))) ) {
+  datacln[,i][datacln[,i]==2] = 0
+  datacln[,i][datacln[,i]>50] = NA
+}
+for ( i in ((which(colnames(datacln)=="adpbintf"):which(colnames(datacln)=="adpbrmbr"))) ) {
+  datacln[,i][datacln[,i]>50] = NA
+}
+datacln$adpbrmbr[datacln$adpbrmbr==2] = 0
+datacln$adpbage[datacln$adpbage>900] = NA
+datacln$adpbnum[datacln$adpbnum>9000] = NA
+datacln$ADPB2WK[datacln$ADPB2WK==2] = 0
+datacln$ADPB2WK[datacln$ADPB2WK>1] = NA
+for ( i in ((which(colnames(datacln)=="adpshmgt"):which(colnames(datacln)=="adpssoc"))) ) {
+  datacln[,i][datacln[,i]>50] = NA
+}
+datacln$adpsdays[datacln$adpsdays>900] = NA
+for ( i in ((which(colnames(datacln)=="adseedoc"):which(colnames(datacln)=="adrxnow"))) ) {
+  datacln[,i][datacln[,i]==2 | datacln[,i]==6] = 0
+  datacln[,i][datacln[,i]==3] = 1
+  datacln[,i][datacln[,i]>50] = NA
+}
+datacln$adrxhlp[datacln$adrxhlp>10] = NA
+datacln$adtmthlp[datacln$adtmthlp>10] = NA
+datacln$amdelt[datacln$amdelt==2] = 0
+datacln$amdeyr[datacln$amdeyr==2] = 0
+datacln$amdeimp[datacln$amdeimp==2] = 0
+tags <- c(tags,
+c(which(colnames(datacln)=="addprev"):which(colnames(datacln)=="amdeimp")),
+seq(which(colnames(datacln)=="iramdelt"), which(colnames(datacln)=="iramdeimp"), by=2),
+c(which(colnames(datacln)=="atxmdeyr"):which(colnames(datacln)=="aaltmde"))
+)
+
+##Youth Mental Health service##
+rm(a)
+rm(b)
+a <- (which(colnames(datacln)=="yuhospyr"):which(colnames(datacln)=="yucosuipln"))
+b <- c( which(colnames(datacln)=="YUHOSPN2"), which(colnames(datacln)=="YURSIDN2"), which(colnames(datacln)=="YUFCARN2"), which(colnames(datacln)=="YUDYTXN2"), which(colnames(datacln)=="YUMHCRN2"), which(colnames(datacln)=="YUTPSTN2"), which(colnames(datacln)=="YUIHTPN2"), which(colnames(datacln)=="YUFDOCN2"), which(colnames(datacln)=="YUJVDTN2") )
+a <- setdiff(a,b)  
+for ( i in a ) {
+  datacln[,i][datacln[,i]==2 | datacln[,i]==6] = 0
+  datacln[,i][datacln[,i]==3] = 1
+  datacln[,i][datacln[,i]>50] = NA
+}
+for ( i in b ) {
+  datacln[,i][datacln[,i]>50] = NA
+}
+datacln$anymhovr[datacln$anymhovr>1] = 0
+for ( i in ((which(colnames(datacln)=="hospvst"):which(colnames(datacln)=="SMHVST2"))) ) {
+  datacln[,i][datacln[,i]==6] = 0
+}
+datacln$yusuithkyr[datacln$yusuithkyr>1] = 0
+datacln$yusuiplnyr[datacln$yusuiplnyr>1] = 0
+tags <- c(tags,
+c(which(colnames(datacln)=="yuhospyr"):which(colnames(datacln)=="YUCOSUIPLN2"))
+)
+
+##Depresion Adolescente##
+rm(a)
+rm(b)
+a <- (which(colnames(datacln)=="yodprev"):which(colnames(datacln)=="yotmthlp"))
+b <- c( which(colnames(datacln)=="yowrage"), which(colnames(datacln)=="YOWRGNL2"), which(colnames(datacln)=="YOWRLSL2"), which(colnames(datacln)=="yowrhrs"), which(colnames(datacln)=="yowrdst"), which(colnames(datacln)=="yowrimp"), which(colnames(datacln)=="yopbintf"), which(colnames(datacln)=="yopbdlya"),
+        which(colnames(datacln)=="yopbage"), which(colnames(datacln)=="yopshmgt"), which(colnames(datacln)=="yopswork"), which(colnames(datacln)=="yopsrels"), which(colnames(datacln)=="yopssoc"), which(colnames(datacln)=="yorxhlp"), which(colnames(datacln)=="yotmthlp") )
+a <- setdiff(a,b)
+a <- setdiff(a, which(colnames(datacln)=="yopsdays"))
+a <- setdiff(a, which(colnames(datacln)=="yopbnum"))
+for ( i in a ) {
+  datacln[,i][datacln[,i]==2 | datacln[,i]==6] = 0
+  datacln[,i][datacln[,i]==3] = 1
+  datacln[,i][datacln[,i]>80] = NA
+}
+for ( i in b ) {
+  datacln[,i][datacln[,i]>80] = NA
+}
+datacln$yopsdays[datacln$yopsdays>9000] = NA
+datacln$yopbnum[datacln$yopbnum>9000] = NA
+tags <- c(tags,
+c(which(colnames(datacln)=="yodprev"):which(colnames(datacln)=="yotmthlp"))
+)
+#Recoded#
+datacln$ymdelt[datacln$ymdelt==2] = 0
+datacln$ymdeyr[datacln$ymdeyr==2] = 0
+datacln$mdeimpy[datacln$mdeimpy==2] = 0
+tags <- c(tags,
+c(which(colnames(datacln)=="ymdelt"):which(colnames(datacln)=="YMDEAUD5YR"), which(colnames(datacln)=="ytxmdeyr"):which(colnames(datacln)=="YMDEIMAD5YR"))
+)
+
+##Alcohol consump##
+datacln$cadrlast[datacln$cadrlast>900] = NA
+
+datacln$uadpeop[datacln$uadpeop==4] = 0
+datacln$UADOTSP2[datacln$UADOTSP2==7] = 0
+datacln$uadplace[datacln$uadplace==4] = 0
+datacln$uadcag[datacln$uadcag==5] = 0
+datacln$uadfwho[datacln$uadfwho==8] = 0
+
+rm(a)
+rm(b)
+a <- (which(colnames(datacln)=="uadpeop"):which(colnames(datacln)=="CADRKMARJ2"))
+b <- which(colnames(datacln) %in% c("uadpeop", "UADOTSP2", "uadplace", "uadcag", "uadfwho"))
+a <- setdiff(a,b)
+for ( i in a ) {
+  datacln[,i][datacln[,i]==2] = 0
+  datacln[,i][datacln[,i]==3] = NA
+}
+tags <- c(tags,
+c(which(colnames(datacln)=="cadrlast") ,which(colnames(datacln)=="uadpeop"):which(colnames(datacln)=="CADRKMARJ2") )
+)
+
+##Emerging issues## (vapes)
+rm(a)
+rm(b)
+a <- (which(colnames(datacln)=="camhprob"):which(colnames(datacln)=="vapflvrec"))
+b <- which(colnames(datacln) %in% c("kratrec", "vapanyrec", "vapnicrec", "vapmrjrec", "vapflvrec"))
+a <- setdiff(a,b)
+for ( i in a ) {
+  datacln[,i][datacln[,i]==2] = 0
+  datacln[,i][datacln[,i]>1] = NA
+}
+for ( i in b ) {
+  datacln[,i][datacln[,i]==11] = 1
+  datacln[,i][datacln[,i]==19 |datacln[,i]==8] = 2
+  datacln[,i][datacln[,i]==9] = 3
+  datacln[,i][datacln[,i]>50] = NA
+}
+for ( i in seq(which(colnames(datacln)=="irkratrec"), which(colnames(datacln)=="irvapflvrec"), 2) ) {
+  datacln[,i][datacln[,i]==9] = 0
+}
+tags <- c(tags,
+c(which(colnames(datacln)=="camhprob"):which(colnames(datacln)=="vapflvrec")),
+seq(which(colnames(datacln)=="irkratrec"), which(colnames(datacln)=="irvapflvrec"), 2),
+c( which(colnames(datacln)=="CAMHPROB2"):which(colnames(datacln)=="ALMATYR2"), which(colnames(datacln)=="kratomflag"):which(colnames(datacln)=="vapnumtype") )
+)
+
+##MJ info## (ult 2 son interview info)
+datacln$MMBATJOB1[datacln$MMBATJOB1==2 | datacln$MMBATJOB1==3] = 0
+rm(a)
+rm(b)
+a <- (which(colnames(datacln)=="mmgetmj"):which(colnames(datacln)=="quarter"))
+b <- which(colnames(datacln) %in% c("mmbtpyr", "mmbtdisp", "mmbjoint", "mmbloose", "mmbother","MMBATJOB1", "mmbclose", "mmbsell", "mmbgive", "mmtrade", 
+                                    "MMTRD30D", "mmtjoint", "mmtloose", "mmtother", "mmtclose","mmtkeep", "mmtsell", "mmtgive", "mmgkeep", "mmgsell", 
+                                    "mmggive", "mmfclose", "mmfkeep", "mmfsell", "mmfgive") )
+a <- setdiff(a,b)
+
+for ( i in a ) {
+  datacln[,i][datacln[,i]>84] = NA
+}
+
+for ( i in b ) {
+  datacln[,i][datacln[,i]==2] = 0
+  datacln[,i][datacln[,i]>84] = NA
+}
+datacln$langver[datacln$langver==2] = 0
+tags <- c(tags,
+c(which(colnames(datacln)=="mmgetmj"):which(colnames(datacln)=="quarter"))
+)
+
+##Demographics##
+datacln$sexident[datacln$sexident==2 | datacln$sexident==3] = 0
+for ( i in which(colnames(datacln) %in% c("service", "actdever", "ACTD2001", "ACTD9001",
+                                          "ACTD7590", "actdviet", "actdpriv", "combatpy"))) {
+  datacln[,i][datacln[,i]==2] = 0
+}
+for ( i in which(colnames(datacln)=="service"):which(colnames(datacln)=="LVLDIFCOMM2") ) {
+  datacln[,i][datacln[,i]>84] = NA
+}
+tags <- c(tags,
+c(which(colnames(datacln)=="service"):which(colnames(datacln)=="LVLDIFCOMM2"))
+)
+
+#Imputed & Recoded#
+datacln$irsex[datacln$irsex==2] = 0
+datacln$irmarit[datacln$irmarit==99] = NA
+tags <- c(tags,
+c( which(colnames(datacln) %in% c("irsex", "irmarit", "IREDUHIGHST2")), which(colnames(datacln)=="catage"):which(colnames(datacln)=="HEALTH2") )  
+)
+
+##Education##
+datacln$eduschlgo[datacln$eduschlgo==2] = 0
+datacln$edufulpar[datacln$edufulpar==2] = 0
+for ( i in which(colnames(datacln)=="eduschlgo"):which(colnames(datacln)=="eduskpcom") ) {
+  datacln[,i][datacln[,i]>84] = NA
+}
+for ( i in which(colnames(datacln)=="miltfamly"):which(colnames(datacln)=="ENRLCOLLFT2") ) {
+  datacln[,i][datacln[,i]==2] = 0
+  datacln[,i][datacln[,i]>2] = NA
+}
+datacln$ENRLCOLLST2[datacln$ENRLCOLLST2==5] = NA
+tags <- c(tags,
+c( which(colnames(datacln)=="eduschlgo"):which(colnames(datacln)=="ENRLCOLLST2") )  
+)
+
+##Employment##
+rm(a)
+rm(b)
+a <- (which(colnames(datacln)=="WRKSTATWK2"):which(colnames(datacln)=="wrkokrand"))
+b <- which(colnames(datacln) %in% c("wrkdpstwk", "wrkhadjob", "WRK35WKUS", "wrkeffort", "wrkdpstyr", "wrkselfem", "wrknjbpyr", "wrkdrgpol", "wrkdrgedu", "wrkdrghlp",
+                                    "wrktstalc", "wrktstdrg", "wrktsthir", "wrktstrdm") )
+a <- setdiff(a,b)
+a <- setdiff(a, which(colnames(datacln)=="WRKLASTYR2"))
+
+datacln$WRKLASTYR2[datacln$WRKLASTYR2>9000] = NA
+for ( i in a ) {
+  datacln[,i][datacln[,i]>84] = NA
+}
+for ( i in b ) {
+  datacln[,i][datacln[,i]==2 | datacln[,i]==4] = 0
+  datacln[,i][datacln[,i]==5] = 1
+  datacln[,i][datacln[,i]>84] = NA
+}
+datacln$irwrkstat[datacln$irwrkstat==99] = 0
+datacln$IRWRKSTAT18[datacln$IRWRKSTAT18==99] = 0
+tags <- c(tags,
+c(which(colnames(datacln)=="WRKSTATWK2"):which(colnames(datacln)=="wrkokrand"), which(colnames(datacln) %in% c("irwrkstat", "IRWRKSTAT18")))
+)
+
+##Household composition##
+datacln$EDFAM18[datacln$EDFAM18==98] = NA
+datacln$imother[datacln$imother>2] = NA
+datacln$imother[datacln$imother==2] = 0
+datacln$ifather[datacln$ifather==2] = 0
+datacln$ifather[datacln$ifather>2] = NA
+tags <- c(tags,
+c(which(colnames(datacln)=="EDFAM18"):which(colnames(datacln)=="IRHHSIZ2"), which(colnames(datacln) %in% c("IRKI17_2", "IRHH65_2")))
+)
+
+##COVID-19##
+datacln$conegmh[datacln$conegmh>5] = NA
+datacln$coalcuse[datacln$coalcuse>5] = NA
+datacln$cofinanc[datacln$cofinanc>5] = NA
+for ( i in which(colnames(datacln)=="comhtele"):which(colnames(datacln)=="cohcsvhlt") ) {
+  datacln[,i][datacln[,i]==2 | datacln[,i]==3] = 0
+  datacln[,i][datacln[,i]>84] = NA
+}
+for ( i in which(colnames(datacln)=="coclnegmh"):which(colnames(datacln)=="COHCSVHLT2") ) {
+  datacln[,i][datacln[,i]==2] = 0
+  datacln[,i][datacln[,i]==3] = NA
+}
+tags <- c(tags,
+setdiff(which(colnames(datacln)=="conegmh"):which(colnames(datacln)=="COHCSVHLT2"), which(colnames(datacln) %in% c("codrguse", "cosutele", "cosuaptdl", "cosurxdl", "cosusvhlt", "cocldrguse", "COSUTELE2", "COSUAPTDL2", "COSURXDL2", "COSUSVHLT2")) )
+)
+
+##Health Insurance##
+for ( i in which(colnames(datacln)=="medicare"):which(colnames(datacln)=="hlcnotyr") ) {
+  datacln[,i][datacln[,i]==2] = 0
+  datacln[,i][datacln[,i]>1] = NA
+}
+datacln$hlcnotmo[datacln$hlcnotmo>12] = 0
+datacln$hlclast[datacln$hlclast>5] = NA
+datacln$hllosrsn[datacln$hllosrsn>12] = NA
+for ( i in which(colnames(datacln)=="hlnvcost"):which(colnames(datacln)=="hlnvsor") ) {
+  datacln[,i][datacln[,i]==6] = 0
+  datacln[,i][datacln[,i]>1] = NA
+}
+for ( i in which(colnames(datacln)=="irmedicr"):which(colnames(datacln)=="irothhlt") ) {
+  datacln[,i][datacln[,i]==2] = 0
+  datacln[,i][datacln[,i]==99] = NA
+}
+datacln$ANYHLTI2[datacln$ANYHLTI2==2] = 0
+datacln$ANYHLTI2[datacln$ANYHLTI2>1] = NA
+datacln$IRINSUR4[datacln$IRINSUR4==2] = 0
+datacln$othins[datacln$othins==2] = 0
+tags <- c(tags,
+c( which(colnames(datacln)=="medicare"):which(colnames(datacln)=="hlnvsor"), seq(which(colnames(datacln)=="irmedicr"), which(colnames(datacln)=="irothhlt"), 2), which(colnames(datacln)=="ANYHLTI2"), which(colnames(datacln)=="IRINSUR4"), which(colnames(datacln)=="othins") )
+)
+
+##Income## (Last 2 county)
+for ( i in which(colnames(datacln)=="cellwrkng"):which(colnames(datacln)=="irfamsvc") ) {
+  datacln[,i][datacln[,i]==2] = 0
+  datacln[,i][datacln[,i]>1] = NA
+}
+datacln$irwelmos[datacln$irwelmos==99] = 0
+datacln$govtprog[datacln$govtprog==2] = 0
+tags <- c(tags,
+c( which(colnames(datacln)=="cellwrkng"),which(colnames(datacln)=="cellnotcl"), seq(which(colnames(datacln)=="irfamsoc"), which(colnames(datacln)=="IRFAMIN3"), 2) ),
+c( which(colnames(datacln)=="govtprog"):which(colnames(datacln)=="COUTYP4") )
+)
+rm(a)
+rm(b)
+
+
+###=======================================================================================###
+###=======================================================================================###
+
+###Armamos las posibles variables resultado###
+noms <- ls(pattern = "^tag")
+noms <- setdiff(noms, "tags")
+proxy <- c()
+for (i in 1:length(noms)) {
+proxy <- cbind(proxy, get(noms[i])) 
+}
+
+drugevr <- datacln[,c(proxy[1,])]
+drugrec <- datacln[,c(proxy[2,])]
+head(drugevr)
+head(drugrec)
+
+rm(noms)
+rm(proxy)
+
+##Consumió alguna droga dura alguna vez?
+#Dicotomica de si alguna vez consumió
+drugevr <- apply(drugevr, 1, FUN = max)
+length(which(drugevr==1)) #15605 personas consumieron alguna vez
+##Hace cuanto consumió drogas? (Ambicioso, poco probable que prediga bien)
+#Las variables recency toman valores 1 a 4. [1 = ult 30 dias, 2 = ult año, 3 = más que año, 4 = nunca]
+drugrec <- apply(drugrec, 1, FUN = min)
+length(which(drugrec!=4)) #15605 personas consumieron alguna vez (match aunque armamos con != vars)
+
+##Consumió drogas en el último año?
+#Las variabes recency tienen que tener valores 1 o 2
+druglyr <- drugrec
+druglyr[druglyr>2] = 0
+druglyr[druglyr==2] = 1
+
+result <- data.frame(drugevr, drugrec, druglyr)
+#Chequeamos que coincidan los resultados
+which(result$druglyr==1 & result$drugrec==3)
+which(result$druglyr==1 & result$drugrec==4)
+which(result$drugevr==0 & result$druglyr==1)
+which(result$drugevr==1 & result$druglyr==4)
+
+data <- data.frame(result, datacln[,tags])
+
+rm("tagcoc", "tagcrack", "taghalu", "taghero", "taginh", "tagmeth", "tagpain", "tags",
+   "tagsed", "tagstim", "tagtranq")
+rm(result, drugevr, drugrec, druglyr)
+rm(ogdata, datacln)
+gc()
+#save.image("D:/UTDT/8vo Semestre/Machine Learning/Proyecto final/DatosLimpios.RData")
+
+
+###=======================================================================================###
+###=======================================================================================###
+##Rescate de variables dummy(1) y variables "try"(2)##
+#Variables dummy(1), transformamos NAs en 0#
+for (i in 1:length(data)) {
+  if(length(data[,i][data[,i]==1 | data[,i]==0 | is.na(data[,i])]) / length(data[,i]) == 1){
+    data[,i][is.na(data[,i])] = 0}  
+}
+
+#Variables try(2), transformamos en categoricas#
+for (i in which(colnames(data) %in% c("cigtry", "cigage", "smklsstry", "cigartry", "alctry", "mjage"))) {
+  data[,i][data[,i] < 13] = 1
+  data[,i][data[,i] >= 13 & data[,i] < 18] = 2
+  data[,i][data[,i] >= 18 & data[,i] < 21] = 3
+  data[,i][data[,i] >= 21 & data[,i] <= 25] = 4
+  data[,i][data[,i] > 25] = 5
+  data[,i][is.na(data[,i])] = 6 
+}
